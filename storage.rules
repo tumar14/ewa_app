@@ -1,0 +1,39 @@
+rules_version = '2';
+
+// Kiosk punch photos (spec section 6, buddy-punching mitigation). Photos
+// are captured at clock-in/out for dispute review, keyed by session id.
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // The signed-in user's company, from the companyId custom claim (see
+    // firestore.rules for the full explanation of why role stays a live
+    // Firestore read while companyId is a claim).
+    function myCompanyId() {
+      return request.auth.token.companyId;
+    }
+
+    function isCompanyAdmin(companyId) {
+      return isSignedIn() &&
+        myCompanyId() == companyId &&
+        firestore.get(/databases/(default)/documents/companies/$(companyId)/employees/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // punches/{companyId}/{sessionId}.jpg — any signed-in member of a
+    // company can upload a punch photo for their own company; only that
+    // company's admins can read them back for review, since these may
+    // contain other workers' images. Path-scoping by companyId is what
+    // stops one company's admin from browsing another's punch photos.
+    match /punches/{companyId}/{fileName} {
+      allow read: if isCompanyAdmin(companyId);
+      allow write: if isSignedIn() &&
+        myCompanyId() == companyId &&
+        request.resource.size < 5 * 1024 * 1024 &&
+        request.resource.contentType.matches('image/.*');
+      allow delete: if isCompanyAdmin(companyId);
+    }
+  }
+}

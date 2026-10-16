@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "813212439033",
+    "project_id": "ewa-app-cb943",
+    "storage_bucket": "ewa-app-cb943.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:813212439033:android:bd515a16353194ec49ad28",
+        "android_client_info": {
+          "package_name": "com.ftmswaziland.ewa.ewa_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDfUjlUtI0kQWiDzj9spWuGk8yzlHyr84g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

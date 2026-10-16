@@ -1,0 +1,171 @@
+rules_version = '2';
+
+// Bootstrapping note: the very first platform admin has no doc/claim to check
+// against — set the `platformAdmin: true` custom claim once via a local Admin
+// SDK script (see functions/scripts/bootstrapPlatformAdmin.md), then every
+// company and its first admin employee is created through the platform-admin
+// flow / createEmployee, which sets custom claims for you.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // The signed-in user's company, from the `companyId` custom claim set by
+    // claimSeat/createEmployee. NOT the source of role authority (role is
+    // always a live Firestore read below) — this claim only lets a rule pick
+    // *which* company's employee doc to check, without an extra get().
+    function myCompanyId() {
+      return request.auth.token.companyId;
+    }
+
+    function isPlatformAdmin() {
+      return isSignedIn() && request.auth.token.platformAdmin == true;
+    }
+
+    function isSelfInCompany(companyId, employeeId) {
+      return isSignedIn() &&
+        request.auth.uid == employeeId &&
+        myCompanyId() == companyId;
+    }
+
+    // Live role read, scoped to the company the path is already inside —
+    // so a demoted/deactivated admin loses access on their very next
+    // request, not on next token refresh (role is deliberately NOT a claim).
+    function isCompanyAdmin(companyId) {
+      return isSignedIn() &&
+        myCompanyId() == companyId &&
+        get(/databases/$(database)/documents/companies/$(companyId)/employees/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // companies/{companyId} — public directory doc (name, shortCode, logoUrl,
+    // hrEmail, hrPhone, currency, active). Public read so the claim screen's
+    // company picker and pre-login branding work — none of these fields are
+    // sensitive, same precedent as the old global settings/app doc. Only the
+    // platform admin creates/edits company shells; company admins manage
+    // their own operational settings via the settings/* subcollection below,
+    // not this doc.
+    match /companies/{companyId} {
+      allow read: if true;
+      allow write: if isPlatformAdmin();
+
+      // employees/{uid} — profile doc id matches the Firebase Auth uid.
+      match /employees/{employeeId} {
+        allow read: if isSelfInCompany(companyId, employeeId) || isCompanyAdmin(companyId);
+        // Admins manage all profile fields, only within their own company.
+        allow write: if isCompanyAdmin(companyId);
+        // Workers may update only safe self-service fields on their own doc:
+        //   consentedAt  — first-login consent acknowledgement
+        //   mustChangePassword — cleared after forced password change
+        //   fcmToken     — push notification token, refreshed automatically
+        allow update: if isSelfInCompany(companyId, employeeId) &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['consentedAt', 'mustChangePassword', 'fcmToken']);
+      }
+
+      // roster/{empNumber} — employee-first onboarding staging area. Each doc
+      // holds PII (wages, bank/MoMo details), so it is admin-only. The
+      // claimSeat Cloud Function runs with the Admin SDK (bypasses these
+      // rules) and is the ONLY path that reads a roster row for an unclaimed
+      // worker — the match never happens on the client. Do NOT make this
+      // client-readable.
+      match /roster/{empNumber} {
+        allow read, write: if isCompanyAdmin(companyId);
+      }
+
+      // time_sessions — a worker can clock themselves in/out; only this
+      // company's admins can edit sessions after the fact (dispute
+      // resolution, flags).
+      match /time_sessions/{sessionId} {
+        allow read: if isCompanyAdmin(companyId) ||
+          (isSignedIn() && resource.data.employeeId == request.auth.uid);
+        allow create: if isCompanyAdmin(companyId) ||
+          (isSignedIn() && request.resource.data.employeeId == request.auth.uid);
+        allow update: if isCompanyAdmin(companyId) ||
+          (isSignedIn() && resource.data.employeeId == request.auth.uid &&
+            // workers may only clock themselves out, not edit other fields
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['clockOutTs']));
+        allow delete: if isCompanyAdmin(companyId);
+      }
+
+      // draw_requests — read-only for clients. Workers create requests through
+      // the requestDraw Cloud Function (cap, count and fee are enforced there)
+      // and admins decide through decideDrawRequest / disburseDraw. The Admin
+      // SDK bypasses these rules, so no client write is ever needed.
+      match /draw_requests/{requestId} {
+        allow read: if isCompanyAdmin(companyId) ||
+          (isSignedIn() && resource.data.employeeId == request.auth.uid);
+        allow write: if false;
+      }
+
+      // settings/{app|org|rates|permissions} — publicly readable so branding
+      // appears before sign-in. Only this company's admins may write.
+      match /settings/{docId} {
+        allow read: if true;
+        allow write: if isCompanyAdmin(companyId);
+      }
+
+      // payroll_runs — written only by the runPayroll Cloud Function
+      // (Admin SDK bypasses rules); this company's admins read for
+      // reconciliation.
+      match /payroll_runs/{runId} {
+        allow read: if isCompanyAdmin(companyId);
+        allow write: if false;
+      }
+
+      // settlements and everything under them (items, exceptions) plus
+      // payment_transactions — written only by the settlement Cloud Functions;
+      // this company's admins read them. payroll_state is the payroll run lock
+      // and is not client-accessible at all.
+      match /settlements/{settlementId} {
+        allow read: if isCompanyAdmin(companyId);
+        allow write: if false;
+
+        match /items/{itemId} {
+          allow read: if isCompanyAdmin(companyId);
+          allow write: if false;
+        }
+        match /exceptions/{exceptionId} {
+          allow read: if isCompanyAdmin(companyId);
+          allow write: if false;
+        }
+      }
+
+      match /payment_transactions/{paymentId} {
+        allow read: if isCompanyAdmin(companyId);
+        allow write: if false;
+      }
+
+      match /payroll_state/{docId} {
+        allow read, write: if false;
+      }
+
+      // audit_log — written only by Cloud Functions; readable by this
+      // company's admins for the full audit trail.
+      match /audit_log/{entryId} {
+        allow read: if isCompanyAdmin(companyId);
+        allow write: if false;
+      }
+    }
+
+    // company_codes/{shortCode} -> companyId — public-read pointer so the
+    // claim screen's "enter a company code" path can resolve a company
+    // without listing every company. Same lookup-by-key pattern as
+    // companies/{companyId}/roster/{empNumber}. Platform-admin write only.
+    match /company_codes/{shortCode} {
+      allow read: if true;
+      allow write: if isPlatformAdmin();
+    }
+
+    // platform_admins/{uid} — listing/UI convenience only. This doc grants
+    // NOTHING by itself; actual authority is the platformAdmin custom claim
+    // checked above. Admin SDK writes only (bootstrap script / future
+    // platform-admin management tooling), never the client.
+    match /platform_admins/{uid} {
+      allow read: if isPlatformAdmin();
+      allow write: if false;
+    }
+  }
+}
