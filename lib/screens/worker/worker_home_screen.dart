@@ -8,6 +8,7 @@ import '../../models/employee.dart';
 import '../../models/settings.dart';
 import '../../models/time_session.dart';
 import '../../providers/auth_providers.dart';
+import '../../providers/company_providers.dart';
 import '../../providers/draw_providers.dart';
 import '../../providers/firebase_providers.dart';
 import '../../providers/settings_providers.dart';
@@ -43,6 +44,7 @@ class _WorkerHomeScreenState extends ConsumerState<WorkerHomeScreen> {
   Widget build(BuildContext context) {
     final employee = ref.watch(currentEmployeeProvider).valueOrNull;
     final firstName = employee?.name.trim().split(' ').first ?? '';
+    final companyName = ref.watch(myCompanyNameProvider);
 
     final appSettings = ref.watch(appSettingsProvider).valueOrNull;
     final isKiosk = appSettings != null &&
@@ -74,7 +76,26 @@ class _WorkerHomeScreenState extends ConsumerState<WorkerHomeScreen> {
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: GlassAppBar(title: Text(titles[_index])),
+      appBar: GlassAppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(titles[_index]),
+            if (companyName.isNotEmpty)
+              Text(
+                companyName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: context.onSurface(0.60),
+                ),
+              ),
+          ],
+        ),
+      ),
       body: GlassBackground(
         child: IndexedStack(
           index: _index,

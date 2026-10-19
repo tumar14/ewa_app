@@ -25,6 +25,7 @@ class WorkerProfileScreen extends ConsumerWidget {
     final company = companyId == null
         ? null
         : ref.watch(companyByIdProvider(companyId)).valueOrNull;
+    final companyName = ref.watch(myCompanyNameProvider);
 
     final initials = employee.name
         .trim()
@@ -92,6 +93,12 @@ class WorkerProfileScreen extends ConsumerWidget {
         ),
         const SizedBox(height: 28),
         _SectionHeader('Employment'),
+        if (companyName.isNotEmpty)
+          _InfoTile(
+            icon: Icons.business_outlined,
+            label: 'Company',
+            value: companyName,
+          ),
         if (employee.employeeNumber.isNotEmpty)
           _InfoTile(
             icon: Icons.numbers_outlined,
