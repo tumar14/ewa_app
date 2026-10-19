@@ -26,7 +26,26 @@ class Tenant {
 final tenantProvider = FutureProvider<Tenant?>((ref) async {
   final user = ref.watch(authStateProvider).valueOrNull;
   if (user == null) return null;
-  final tokenResult = await user.getIdTokenResult(true);
+  final IdTokenResult tokenResult;
+  try {
+    tokenResult = await user.getIdTokenResult(true);
+  } on FirebaseAuthException catch (e) {
+    // A revoked or expired sign-in (password changed, account disabled or
+    // deleted) can never recover on its own: send the person back to sign-in
+    // rather than leaving them on an error screen. Network errors still surface.
+    const unrecoverable = {
+      'user-token-expired',
+      'invalid-user-token',
+      'user-disabled',
+      'user-not-found',
+      'requires-recent-login',
+    };
+    if (unrecoverable.contains(e.code)) {
+      await FirebaseAuth.instance.signOut();
+      return null;
+    }
+    rethrow;
+  }
   final claims = tokenResult.claims ?? const {};
   return Tenant(
     companyId: claims['companyId'] as String?,

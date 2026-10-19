@@ -1,0 +1,87 @@
+---
+title: Employer registration
+description: Register your company for Hola Manje. Tell us about your business and our team will review your request and contact you to set up your account.
+---
+<section class="page-hero">
+  <div class="wrap">
+    <p class="eyebrow">Employer registration</p>
+    <h1>Register your company</h1>
+    <p class="lead">Tell us about your business. We review every request and contact you before anything is set up.</p>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap two-col">
+    <form class="form" data-enquiry="employer_registration">
+      <div class="field">
+        <label for="companyName">Company name <span class="req" aria-hidden="true">*</span></label>
+        <input id="companyName" name="companyName" type="text" autocomplete="organization" required minlength="2" maxlength="120">
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="contactName">Your name <span class="req" aria-hidden="true">*</span></label>
+          <input id="contactName" name="contactName" type="text" autocomplete="name" required minlength="2" maxlength="100">
+        </div>
+        <div class="field">
+          <label for="jobTitle">Job title</label>
+          <input id="jobTitle" name="jobTitle" type="text" autocomplete="organization-title" maxlength="100" placeholder="e.g. HR manager">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="contactEmail">Work email <span class="req" aria-hidden="true">*</span></label>
+          <input id="contactEmail" name="contactEmail" type="email" autocomplete="email" required maxlength="160">
+        </div>
+        <div class="field">
+          <label for="contactPhone">Phone <span class="req" aria-hidden="true">*</span></label>
+          <input id="contactPhone" name="contactPhone" type="tel" autocomplete="tel" required maxlength="25" placeholder="e.g. +268 7600 0000">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="employeeCount">Number of employees <span class="req" aria-hidden="true">*</span></label>
+          <input id="employeeCount" name="employeeCount" type="number" inputmode="numeric" min="1" max="1000000" step="1" required>
+        </div>
+        <div class="field">
+          <label for="payFrequency">How often do you pay?</label>
+          <select id="payFrequency" name="payFrequency">
+            <option value="">Choose one</option>
+            <option>Weekly</option>
+            <option>Fortnightly</option>
+            <option>Monthly</option>
+            <option>Mixed or other</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label for="industry">Industry</label>
+        <input id="industry" name="industry" type="text" maxlength="100" placeholder="e.g. Garment manufacturing">
+      </div>
+      <div class="field">
+        <label for="message">Anything we should know?</label>
+        <textarea id="message" name="message" maxlength="1500"></textarea>
+        <p class="hint">Please do not include passwords, bank details or pay figures.</p>
+      </div>
+      <div class="field check">
+        <input id="consent" name="consent" type="checkbox" required>
+        <label for="consent">I am authorised to register this company, and I agree that Hola Manje may contact me about this request. <span class="req" aria-hidden="true">*</span></label>
+      </div>
+      <div class="hp" aria-hidden="true"><label>Leave this field empty<input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>
+      <div class="form-status" role="status" aria-live="polite"></div>
+      <div><button class="btn btn-primary" type="submit">Send registration request</button></div>
+      <noscript><p class="notice">This form needs JavaScript to send. Please enable it and try again.</p></noscript>
+    </form>
+
+    <aside>
+      <div class="card">
+        <h3>What happens next</h3>
+        <ol class="steps">
+          <li><h3>We review</h3><p>A member of our team reads your request.</p></li>
+          <li><h3>We contact you</h3><p>We confirm details, answer questions and agree terms with you.</p></li>
+          <li><h3>We set up your company</h3><p>We create your company and one administrator. They sign in with a temporary password and must change it on first use.</p></li>
+        </ol>
+        <p class="small muted">This form does not create an account, and nobody is given administrator access until a person has reviewed your request.</p>
+      </div>
+    </aside>
+  </div>
+</section>

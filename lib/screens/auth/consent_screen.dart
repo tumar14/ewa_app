@@ -1,3 +1,4 @@
+import '../../brand.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/firebase_providers.dart';
@@ -40,7 +41,7 @@ class _ConsentScreenState extends ConsumerState<ConsentScreen> {
     final companyName =
         ref.watch(appSettingsProvider).valueOrNull?.companyName ?? '';
     final appName =
-        companyName.isNotEmpty ? '$companyName — Earned Wage Access' : 'Earned Wage Access';
+        companyName.isNotEmpty ? '$companyName — ${Brand.name}' : Brand.name;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -130,8 +131,8 @@ class _PolicyText extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Before using the Earned Wage Access (EWA) service, please read '
-          'and agree to the following terms.',
+          'Before using the ${Brand.name} earned wage access service, please '
+          'read and agree to the following terms.',
           style: ts.bodyMedium,
         ),
         section(
@@ -143,13 +144,13 @@ class _PolicyText extends StatelessWidget {
         section(
           'How your data is used',
           'Your data is used solely to calculate your earned wages, process '
-          'advance (EWA) requests, and transfer funds to your designated '
+          'wage advance requests, and record payments to your designated '
           'account. $name will not sell or share your data with third parties '
           'except as required by Eswatini law.',
         ),
         section(
           'Advance terms',
-          'An EWA advance is a portion of wages you have already earned. '
+          'An advance is a portion of wages you have already earned. '
           'A service fee applies to each advance (shown before you confirm). '
           'The total amount (advance + fee) is deducted from your next '
           'payslip. You may not advance more than the configured percentage '

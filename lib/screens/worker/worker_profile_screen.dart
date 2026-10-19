@@ -1,3 +1,4 @@
+import '../../brand.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -191,7 +192,7 @@ class WorkerProfileScreen extends ConsumerWidget {
             children: [
               ListTile(
                 leading: const Icon(Icons.info_outline),
-                title: const Text('How EWA works'),
+                title: const Text('How ${Brand.name} works'),
                 trailing: const Icon(Icons.chevron_right, size: 18),
                 onTap: () => _showHowItWorks(context, ref, company),
               ),
@@ -250,16 +251,17 @@ class WorkerProfileScreen extends ConsumerWidget {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('How EWA works'),
+        title: Text('How ${Brand.name} works'),
         content: SingleChildScrollView(
           child: Text(
-            'Earned Wage Access (EWA) lets you withdraw a portion of the wages '
-            'you have already earned, before your scheduled payday.\n\n'
+            '${Brand.name} lets you access a portion of the wages you have '
+            'already earned, before your scheduled payday.\n\n'
             '• You can request up to $pct of your accrued wages per pay cycle.\n'
             '• Up to $drawsPerCycle advance${drawsPerCycle == 1 ? '' : 's'} allowed per cycle.\n'
             '• A small service fee applies — shown before you confirm.\n'
             '• The advance + fee is automatically deducted from your next payslip.\n'
-            '• Requests are reviewed and approved by your HR or admin team.\n\n'
+            '• Requests are reviewed and approved by your HR or admin team.\n'
+            '• Your employer\'s finance team sends the money and marks it as paid.\n\n'
             '$contactLine',
           ),
         ),

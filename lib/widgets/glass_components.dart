@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import '../theme/glass_theme.dart';
 
@@ -30,8 +31,8 @@ class GlassBackground extends StatelessWidget {
             left: -80,
             child: _GlowOrb(
                 color: isDark
-                    ? const Color(0x1F4A9EFF)
-                    : const Color(0x184A9EFF),
+                    ? const Color(0x1F14B8A6)
+                    : const Color(0x1814B8A6),
                 size: 380),
           ),
           Positioned(
@@ -39,8 +40,8 @@ class GlassBackground extends StatelessWidget {
             right: -60,
             child: _GlowOrb(
                 color: isDark
-                    ? const Color(0x176A3FFF)
-                    : const Color(0x126A3FFF),
+                    ? const Color(0x1710B981)
+                    : const Color(0x1210B981),
                 size: 320),
           ),
           Positioned(
@@ -48,8 +49,8 @@ class GlassBackground extends StatelessWidget {
             right: -100,
             child: _GlowOrb(
                 color: isDark
-                    ? const Color(0x124A9EFF)
-                    : const Color(0x0D4A9EFF),
+                    ? const Color(0x1214B8A6)
+                    : const Color(0x0D14B8A6),
                 size: 260),
           ),
           child,
@@ -123,7 +124,7 @@ class GlassCard extends StatelessWidget {
                 offset: const Offset(0, 8),
               ),
               const BoxShadow(
-                color: Color(0x0A4A9EFF),
+                color: Color(0x0A14B8A6),
                 blurRadius: 40,
                 spreadRadius: -8,
               ),
@@ -157,7 +158,9 @@ class GlassCard extends StatelessWidget {
   }
 }
 
-/// Glass AppBar — blurs content scrolling beneath it.
+/// Glass AppBar — blurs content scrolling beneath it. In light mode it is solid
+/// white: the bar sits outside the page background, and a translucent white over
+/// the dark window base would render grey.
 class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
   final Widget? title;
   final List<Widget>? actions;
@@ -185,7 +188,7 @@ class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     final isDark = context.isDark;
     final bgColor =
-        isDark ? const Color(0x0DFFFFFF) : const Color(0xBFFFFFFF);
+        isDark ? const Color(0x0DFFFFFF) : const Color(0xFFFFFFFF);
     final borderColor =
         isDark ? const Color(0x17FFFFFF) : const Color(0x0F000000);
 
@@ -207,6 +210,7 @@ class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
             backgroundColor: Colors.transparent,
             elevation: 0,
             scrolledUnderElevation: 0,
+            systemOverlayStyle: brandStatusBarStyle(isDark),
             bottom: bottom,
           ),
         ),
@@ -214,6 +218,18 @@ class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
     );
   }
 }
+
+/// Status bar that blends into the page: transparent, icons matching the
+/// theme, and no Android grey contrast scrim behind it.
+SystemUiOverlayStyle brandStatusBarStyle(bool dark) => SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: dark ? Brightness.light : Brightness.dark,
+      statusBarBrightness: dark ? Brightness.dark : Brightness.light,
+      systemStatusBarContrastEnforced: false,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarIconBrightness: dark ? Brightness.light : Brightness.dark,
+      systemNavigationBarContrastEnforced: false,
+    );
 
 /// Floating pill-shaped glass bottom navigation bar.
 class GlassNavigationBar extends StatelessWidget {
@@ -265,7 +281,7 @@ class GlassNavigationBar extends StatelessWidget {
               backgroundColor: Colors.transparent,
               elevation: 0,
               height: 64,
-              indicatorColor: const Color(0x334A9EFF),
+              indicatorColor: const Color(0x3314B8A6),
               labelBehavior:
                   NavigationDestinationLabelBehavior.alwaysShow,
             ),
@@ -302,7 +318,7 @@ class GlassPrimaryButton extends StatelessWidget {
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: enabled
-                ? const [Color(0xFF4A9EFF), Color(0xFF2979FF)]
+                ? const [Color(0xFF12A394), Color(0xFF0F766E)]
                 : context.isDark
                     ? [const Color(0x1AFFFFFF), const Color(0x1AFFFFFF)]
                     : [const Color(0x1A000000), const Color(0x1A000000)],
@@ -311,7 +327,7 @@ class GlassPrimaryButton extends StatelessWidget {
           boxShadow: enabled
               ? [
                   const BoxShadow(
-                    color: Color(0x594A9EFF),
+                    color: Color(0x5914B8A6),
                     blurRadius: 16,
                     offset: Offset(0, 4),
                   ),

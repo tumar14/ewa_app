@@ -232,7 +232,7 @@ class _HomeHero extends ConsumerWidget {
 
     return GlassCard(
       radius: 20,
-      surfaceColor: const Color(0x1A4A9EFF),
+      surfaceColor: const Color(0x1A14B8A6),
       padding: const EdgeInsets.all(0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -982,7 +982,7 @@ class _DrawTimelineCard extends StatelessWidget {
             ),
             _TStep(
               icon: Icons.mobile_screen_share_outlined,
-              label: 'Sent to account',
+              label: 'Paid by employer',
               sublabel: draw.disbursedAt != null
                   ? _dateFmt.format(draw.disbursedAt!.toLocal())
                   : null,

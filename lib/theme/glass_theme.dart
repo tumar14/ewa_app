@@ -1,21 +1,21 @@
 import 'package:flutter/material.dart';
 
 // ── Dark palette ──────────────────────────────────────────────────────────────
-const glassNavy0 = Color(0xFF070B18);
-const glassNavy1 = Color(0xFF0D1526);
-const glassNavy2 = Color(0xFF111C35);
-const glassBlue = Color(0xFF4A9EFF);
-const glassBlueDark = Color(0xFF2979FF);
-const glassBlueGlow = Color(0x594A9EFF);
+const glassNavy0 = Color(0xFF071427);
+const glassNavy1 = Color(0xFF0B1F3A);
+const glassNavy2 = Color(0xFF12294A);
+const glassBlue = Color(0xFF14B8A6);
+const glassBlueDark = Color(0xFF0F766E);
+const glassBlueGlow = Color(0x5914B8A6);
 const glassDanger = Color(0xFFFF6B6B);
 const glassSuccess = Color(0xFF4ADE80);
 const glassWarning = Color(0xFFFFB347);
 
 // ── Light palette ─────────────────────────────────────────────────────────────
-const glassLightBg0 = Color(0xFFF0F4FF);
-const glassLightBg1 = Color(0xFFE6EEFF);
-const glassLightBg2 = Color(0xFFEBF1FF);
-const glassTextDark = Color(0xFF0D1526);
+const glassLightBg0 = Color(0xFFFFFFFF);
+const glassLightBg1 = Color(0xFFF6FAFB);
+const glassLightBg2 = Color(0xFFEEF5F7);
+const glassTextDark = Color(0xFF0B1F3A);
 
 // ── Legacy surface helpers (dark-only) ────────────────────────────────────────
 Color glassSurface([double opacity = 0.07]) => Colors.white.withOpacity(opacity);
@@ -51,7 +51,7 @@ ThemeData buildGlassTheme() {
     outline: Color(0x21FFFFFF),
     outlineVariant: Color(0x14FFFFFF),
     onSurfaceVariant: Color(0x99FFFFFF),
-    primaryContainer: Color(0x334A9EFF),
+    primaryContainer: Color(0x3314B8A6),
     onPrimaryContainer: glassBlue,
     errorContainer: Color(0x33FF6B6B),
     onErrorContainer: glassDanger,
@@ -103,7 +103,7 @@ ThemeData buildGlassTheme() {
     navigationBarTheme: NavigationBarThemeData(
       backgroundColor: Colors.transparent,
       elevation: 0,
-      indicatorColor: Color(0x334A9EFF),
+      indicatorColor: Color(0x3314B8A6),
       iconTheme: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
           return const IconThemeData(color: glassBlue, size: 22);
@@ -159,7 +159,7 @@ ThemeData buildGlassTheme() {
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
-        backgroundColor: glassBlue,
+        backgroundColor: glassBlueDark,
         foregroundColor: Colors.white,
         elevation: 0,
         padding:
@@ -172,7 +172,7 @@ ThemeData buildGlassTheme() {
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        backgroundColor: glassBlue,
+        backgroundColor: glassBlueDark,
         foregroundColor: Colors.white,
         elevation: 0,
         padding:
@@ -228,7 +228,7 @@ ThemeData buildGlassTheme() {
       activeTrackColor: glassBlue,
       inactiveTrackColor: const Color(0x26FFFFFF),
       thumbColor: Colors.white,
-      overlayColor: const Color(0x334A9EFF),
+      overlayColor: const Color(0x3314B8A6),
       valueIndicatorColor: glassBlue,
       valueIndicatorTextStyle:
           const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
@@ -243,14 +243,14 @@ ThemeData buildGlassTheme() {
     ),
     iconTheme: const IconThemeData(color: Color(0xCCFFFFFF)),
     snackBarTheme: SnackBarThemeData(
-      backgroundColor: const Color(0xFF1A2340),
+      backgroundColor: const Color(0xFF16304F),
       contentTextStyle: const TextStyle(color: Colors.white),
       shape:
           RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       behavior: SnackBarBehavior.floating,
     ),
     dialogTheme: DialogThemeData(
-      backgroundColor: const Color(0xFF111C35),
+      backgroundColor: const Color(0xFF12294A),
       shape:
           RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       titleTextStyle: const TextStyle(
@@ -267,7 +267,7 @@ ThemeData buildGlassTheme() {
     progressIndicatorTheme:
         const ProgressIndicatorThemeData(color: glassBlue),
     floatingActionButtonTheme: const FloatingActionButtonThemeData(
-      backgroundColor: glassBlue,
+      backgroundColor: glassBlueDark,
       foregroundColor: Colors.white,
       elevation: 0,
     ),
@@ -280,9 +280,9 @@ ThemeData buildGlassThemeLight() {
   const onSurfaceVariant = Color(0x99000000);
 
   const colorScheme = ColorScheme.light(
-    primary: glassBlue,
+    primary: glassBlueDark,
     onPrimary: Colors.white,
-    secondary: glassBlue,
+    secondary: glassBlueDark,
     onSecondary: Colors.white,
     surface: glassLightBg0,
     onSurface: onSurface,
@@ -293,8 +293,8 @@ ThemeData buildGlassThemeLight() {
     outline: Color(0x29000000),
     outlineVariant: Color(0x14000000),
     onSurfaceVariant: onSurfaceVariant,
-    primaryContainer: Color(0x204A9EFF),
-    onPrimaryContainer: Color(0xFF1A5FA8),
+    primaryContainer: Color(0x2014B8A6),
+    onPrimaryContainer: Color(0xFF0F766E),
     errorContainer: Color(0x20FF6B6B),
     onErrorContainer: glassDanger,
   );
@@ -335,16 +335,16 @@ ThemeData buildGlassThemeLight() {
     navigationBarTheme: NavigationBarThemeData(
       backgroundColor: Colors.transparent,
       elevation: 0,
-      indicatorColor: Color(0x204A9EFF),
+      indicatorColor: Color(0x2014B8A6),
       iconTheme: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
-          return const IconThemeData(color: glassBlue, size: 22);
+          return const IconThemeData(color: glassBlueDark, size: 22);
         }
         return const IconThemeData(color: Color(0x80000000), size: 22);
       }),
       labelTextStyle: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
-          return const TextStyle(color: glassBlue, fontSize: 11, fontWeight: FontWeight.w600);
+          return const TextStyle(color: glassBlueDark, fontSize: 11, fontWeight: FontWeight.w600);
         }
         return const TextStyle(color: Color(0x80000000), fontSize: 11);
       }),
@@ -362,7 +362,7 @@ ThemeData buildGlassThemeLight() {
       fillColor: const Color(0x0A000000),
       hintStyle: const TextStyle(color: Color(0x66000000)),
       labelStyle: const TextStyle(color: onSurfaceVariant),
-      floatingLabelStyle: const TextStyle(color: glassBlue),
+      floatingLabelStyle: const TextStyle(color: glassBlueDark),
       prefixIconColor: onSurfaceVariant,
       suffixIconColor: onSurfaceVariant,
       border: OutlineInputBorder(
@@ -375,7 +375,7 @@ ThemeData buildGlassThemeLight() {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: glassBlue, width: 1.5),
+        borderSide: const BorderSide(color: glassBlueDark, width: 1.5),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
@@ -389,7 +389,7 @@ ThemeData buildGlassThemeLight() {
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
-        backgroundColor: glassBlue,
+        backgroundColor: glassBlueDark,
         foregroundColor: Colors.white,
         elevation: 0,
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
@@ -399,7 +399,7 @@ ThemeData buildGlassThemeLight() {
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        backgroundColor: glassBlue,
+        backgroundColor: glassBlueDark,
         foregroundColor: Colors.white,
         elevation: 0,
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
@@ -418,7 +418,7 @@ ThemeData buildGlassThemeLight() {
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
-        foregroundColor: glassBlue,
+        foregroundColor: glassBlueDark,
         textStyle: const TextStyle(fontWeight: FontWeight.w500),
       ),
     ),
@@ -430,14 +430,14 @@ ThemeData buildGlassThemeLight() {
       }),
       trackColor: WidgetStateProperty.resolveWith((states) {
         return states.contains(WidgetState.selected)
-            ? glassBlue
+            ? glassBlueDark
             : const Color(0x26000000);
       }),
     ),
     checkboxTheme: CheckboxThemeData(
       fillColor: WidgetStateProperty.resolveWith((states) {
         return states.contains(WidgetState.selected)
-            ? glassBlue
+            ? glassBlueDark
             : Colors.transparent;
       }),
       checkColor: WidgetStateProperty.all(Colors.white),
@@ -445,11 +445,11 @@ ThemeData buildGlassThemeLight() {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
     ),
     sliderTheme: SliderThemeData(
-      activeTrackColor: glassBlue,
+      activeTrackColor: glassBlueDark,
       inactiveTrackColor: const Color(0x26000000),
-      thumbColor: glassBlue,
-      overlayColor: const Color(0x204A9EFF),
-      valueIndicatorColor: glassBlue,
+      thumbColor: glassBlueDark,
+      overlayColor: const Color(0x2014B8A6),
+      valueIndicatorColor: glassBlueDark,
       valueIndicatorTextStyle:
           const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
     ),
@@ -482,9 +482,9 @@ ThemeData buildGlassThemeLight() {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
     ),
     progressIndicatorTheme:
-        const ProgressIndicatorThemeData(color: glassBlue),
+        const ProgressIndicatorThemeData(color: glassBlueDark),
     floatingActionButtonTheme: const FloatingActionButtonThemeData(
-      backgroundColor: glassBlue,
+      backgroundColor: glassBlueDark,
       foregroundColor: Colors.white,
       elevation: 0,
     ),

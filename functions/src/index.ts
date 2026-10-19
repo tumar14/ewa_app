@@ -13,6 +13,7 @@ import {
 
 export { requestDraw, decideDrawRequest, disburseDraw } from "./draws";
 export { runPayroll } from "./payroll";
+export { submitEnquiry } from "./enquiries";
 export {
   createSettlement,
   confirmDeductions,

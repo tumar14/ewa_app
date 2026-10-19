@@ -1,0 +1,64 @@
+---
+title: Security and privacy
+description: How Hola Manje protects accounts, separates company data, enforces advance limits on the server and handles personal and pay information.
+---
+<section class="page-hero">
+  <div class="wrap">
+    <p class="eyebrow">Security and privacy</p>
+    <h1>How we protect your account and your pay information</h1>
+    <p class="lead">Wage information is personal. This page explains in plain language what we collect, who can see it, and the safeguards built into the platform.</p>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap prose">
+    <h2>Security</h2>
+    <h3>Sign-in</h3>
+    <ul>
+      <li>Accounts are protected by a password you set yourself. Employees claim their account with an employee number, their name and a one-time code from HR.</li>
+      <li>Administrators created by our team must change their temporary password the first time they sign in.</li>
+      <li>Authentication is provided by Google Firebase Authentication. Passwords are never stored in readable form by Hola Manje.</li>
+    </ul>
+    <h3>Who can see what</h3>
+    <ul>
+      <li><strong>Employees</strong> see their own earnings, advances and profile only.</li>
+      <li><strong>Employer administrators</strong> see their own company's people, advances, payroll and settlements, and nothing from any other company.</li>
+      <li><strong>Hola Manje platform administrators</strong> can register and suspend companies. By design they cannot browse a company's employees, advances, payroll or audit log.</li>
+      <li>Roles are checked on our servers each time. Removing someone's administrator role takes effect on their next action.</li>
+      <li>No one is made an administrator automatically. Registration requests are reviewed by a person.</li>
+    </ul>
+    <h3>Protecting the money records</h3>
+    <ul>
+      <li>Advance limits, fees and approvals are calculated and enforced on our servers, not in the app, so they cannot be changed from a phone.</li>
+      <li>Amounts are stored as whole cents to avoid rounding errors.</li>
+      <li>Requests, approvals, payments, payroll runs and settlements are written to an audit log that records who did what and when.</li>
+      <li>A payment is only recorded against a settlement after a person has checked it against the bank account, and the same bank transaction cannot be counted twice.</li>
+      <li>Payment credentials and secret keys are kept on the server and never placed in the website or the app.</li>
+      <li>Hola Manje does not currently hold or transfer money. Employers pay advances and settlements themselves, and the platform records them.</li>
+    </ul>
+
+    <h2>Privacy</h2>
+    <h3>What we collect</h3>
+    <ul>
+      <li>Your name, email address and employee number.</li>
+      <li>Your work hours (clock-in and clock-out times) and pay rate, as supplied or recorded by your employer.</li>
+      <li>The bank or mobile money details your employer holds for paying you.</li>
+      <li>Your advance requests, their status, fees and deductions.</li>
+      <li>For employers: company details and the contact details of the people who register or administer the account.</li>
+    </ul>
+    <h3>How we use it</h3>
+    <p>Only to calculate earned wages, process advance requests, record payments, reconcile payroll deductions and settlements, keep the service secure, and respond to your enquiries. We do not sell personal data. We do not share it with third parties except where Eswatini law requires.</p>
+    <h3>Where it is kept</h3>
+    <p>Data is stored on Google Firebase infrastructure. Access is limited by the role rules described above.</p>
+    <h3>How long we keep it</h3>
+    <p>Employment and pay records are kept for as long as employment record-keeping requirements apply. The in-app terms state a minimum of seven years in line with Eswatini labour record-keeping requirements.</p>
+    <h3>Your rights</h3>
+    <p>You can ask to see, correct, or request deletion of your personal data, subject to legal obligations. Contact your HR administrator, or use our <a href="/contact">contact page</a> if you need help.</p>
+    <h3>Website forms</h3>
+    <p>The registration and contact forms send only what you type to our servers, where it is used to reply to you. We do not use advertising trackers or third-party analytics on this website.</p>
+
+    <div class="notice">
+      <p><strong>Found a security problem?</strong> Please tell us through the <a href="/contact">contact form</a>, choosing &ldquo;Security&rdquo; as the topic. Do not include passwords or personal data in your message.</p>
+    </div>
+  </div>
+</section>

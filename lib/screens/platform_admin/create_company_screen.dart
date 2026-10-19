@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../models/enquiry.dart';
+import '../../providers/enquiry_providers.dart';
 import '../../providers/firebase_providers.dart';
 import '../../services/platform_admin_service.dart';
 import '../../theme/glass_theme.dart';
@@ -9,7 +11,12 @@ import '../../widgets/glass_components.dart';
 /// in one step (a company with zero admins would be a dead end — nobody
 /// could sign in to upload a roster or add more employees).
 class CreateCompanyScreen extends ConsumerStatefulWidget {
-  const CreateCompanyScreen({super.key});
+  /// When opened from a website enquiry, the form starts prefilled and the
+  /// enquiry is marked handled once the company is created. Nothing is created
+  /// or granted until the platform admin submits the form.
+  final Enquiry? enquiry;
+
+  const CreateCompanyScreen({super.key, this.enquiry});
 
   @override
   ConsumerState<CreateCompanyScreen> createState() => _CreateCompanyScreenState();
@@ -27,6 +34,19 @@ class _CreateCompanyScreenState extends ConsumerState<CreateCompanyScreen> {
 
   bool _saving = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    final e = widget.enquiry;
+    if (e != null) {
+      _nameCtrl.text = e.companyName;
+      _hrEmailCtrl.text = e.contactEmail;
+      _hrPhoneCtrl.text = e.contactPhone;
+      _adminNameCtrl.text = e.contactName;
+      _adminEmailCtrl.text = e.contactEmail;
+    }
+  }
 
   @override
   void dispose() {
@@ -55,6 +75,15 @@ class _CreateCompanyScreenState extends ConsumerState<CreateCompanyScreen> {
             adminEmail: _adminEmailCtrl.text.trim(),
             adminTemporaryPassword: _adminPasswordCtrl.text,
           );
+      final enquiry = widget.enquiry;
+      if (enquiry != null) {
+        try {
+          await ref.read(enquiryRepositoryProvider).setHandled(enquiry.id, true,
+              note: 'Company created (code ${result.shortCode})');
+        } catch (_) {
+          // The company exists either way; the enquiry can be marked by hand.
+        }
+      }
       if (mounted) {
         Navigator.of(context).pop();
         _showCreated(context, _nameCtrl.text.trim(), result.shortCode);

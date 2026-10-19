@@ -57,11 +57,14 @@ class _DisburseCardState extends ConsumerState<_DisburseCard> {
       builder: (ctx) {
         final employee = ref.read(employeeByIdProvider(widget.draw.employeeId)).valueOrNull;
         return AlertDialog(
-          title: const Text('Confirm disbursement'),
+          title: const Text('Confirm payment made'),
           content: Text(
-            'Mark E${widget.draw.amount.toStringAsFixed(2)} as disbursed '
-            'to ${employee?.name ?? widget.draw.employeeId}?\n\n'
-            'Disbursement method: ${employee?.disbursementMethod.name ?? "—"}',
+            'Confirm that you have already paid '
+            'E${widget.draw.amount.toStringAsFixed(2)} to '
+            '${employee?.name ?? widget.draw.employeeId}.\n\n'
+            'Hola Manje records this payment; it does not send the money. '
+            'Pay by bank transfer, mobile money or cash first, then confirm.\n\n'
+            'Payment method: ${employee?.disbursementMethod.name ?? "—"}',
           ),
           actions: [
             TextButton(
@@ -152,7 +155,7 @@ class _DisburseCardState extends ConsumerState<_DisburseCard> {
                         child: CircularProgressIndicator(
                             strokeWidth: 2, color: Colors.white))
                     : const Icon(Icons.send_outlined),
-                label: const Text('Mark disbursed'),
+                label: const Text('Mark as paid'),
                 onPressed: _loading ? null : _disburse,
               ),
             ),

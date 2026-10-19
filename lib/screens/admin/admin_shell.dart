@@ -14,6 +14,7 @@ import 'permissions_screen.dart';
 import 'rate_matrix_screen.dart';
 import 'roster_upload_screen.dart';
 import 'settlements_screen.dart';
+import 'transactions_screen.dart';
 import 'settings_screen.dart';
 import 'supervisor_signoff_screen.dart';
 import 'workforce_overview_screen.dart';
@@ -111,6 +112,13 @@ class _MoreScreen extends ConsumerWidget {
             subtitle: 'Review and sign off attendance exceptions',
             onTap: () => Navigator.of(context).push(MaterialPageRoute(
                 builder: (_) => const SupervisorSignoffScreen())),
+          ),
+          _MoreTile(
+            icon: Icons.receipt_long_outlined,
+            label: 'Transactions',
+            subtitle: 'Every advance: status, amount and fee',
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => const TransactionsScreen())),
           ),
           _MoreTile(
             icon: Icons.payments_outlined,

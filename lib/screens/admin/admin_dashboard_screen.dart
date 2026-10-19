@@ -67,7 +67,7 @@ class AdminDashboardScreen extends ConsumerWidget {
           // Greeting card
           GlassCard(
             radius: 20,
-            surfaceColor: const Color(0x1A4A9EFF),
+            surfaceColor: const Color(0x1A14B8A6),
             padding: const EdgeInsets.all(20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

@@ -22,6 +22,10 @@ final drawHistoryProvider = StreamProvider<List<DrawRequest>>((ref) {
   return ref.watch(drawRepositoryProvider).watchHistory();
 });
 
+final allDrawsProvider = StreamProvider<List<DrawRequest>>((ref) {
+  return ref.watch(drawRepositoryProvider).watchAll();
+});
+
 final approvedPendingDisbursementProvider = StreamProvider<List<DrawRequest>>((ref) {
   return ref.watch(drawRepositoryProvider).watchApprovedPendingDisbursement();
 });

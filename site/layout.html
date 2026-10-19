@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{title}}</title>
+  <meta name="description" content="{{description}}">
+  <meta name="theme-color" content="#0B1F3A">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' {{connectSrc}}; form-action 'self'; base-uri 'self'">
+  <meta property="og:title" content="{{title}}">
+  <meta property="og:description" content="{{description}}">
+  <meta property="og:type" content="website">
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body class="page-{{slug}}">
+  <a class="skip-link" href="#main">Skip to main content</a>
+
+  <div class="utility-bar">
+    <div class="wrap utility-inner">
+      <span class="utility-tagline">Your money. Your time.</span>
+      <nav aria-label="Account links" class="utility-links">
+        <a href="/employer-login"{{cur:employer-login}}>Employer login</a>
+        <a href="/employee-login"{{cur:employee-login}}>Employee login</a>
+        <a class="utility-cta" href="/employer-registration"{{cur:employer-registration}}>Register your company</a>
+      </nav>
+    </div>
+  </div>
+
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="brand" href="/" aria-label="Hola Manje home">
+        <img src="/assets/logo.svg" width="40" height="40" alt="">
+        <span class="brand-name">Hola Manje</span>
+      </a>
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav">
+        <span class="nav-toggle-bars" aria-hidden="true"></span>
+        <span class="sr-only">Menu</span>
+      </button>
+      <nav id="site-nav" class="site-nav" aria-label="Main">
+        <ul>
+          <li><a href="/"{{cur:home}}>Home</a></li>
+          <li><a href="/how-it-works"{{cur:how-it-works}}>How it works</a></li>
+          <li><a href="/for-employers"{{cur:for-employers}}>For employers</a></li>
+          <li><a href="/for-employees"{{cur:for-employees}}>For employees</a></li>
+          <li><a href="/benefits"{{cur:benefits}}>Benefits</a></li>
+          <li><a href="/security-and-privacy"{{cur:security-and-privacy}}>Security &amp; privacy</a></li>
+          <li><a href="/faqs"{{cur:faqs}}>FAQs</a></li>
+          <li><a href="/contact"{{cur:contact}}>Contact</a></li>
+        </ul>
+        <div class="nav-actions">
+          <a class="btn btn-ghost" href="/employer-login">Employer login</a>
+          <a class="btn btn-ghost" href="/employee-login">Employee login</a>
+          <a class="btn btn-primary" href="/employer-registration">Register your company</a>
+        </div>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+{{content}}
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-grid">
+      <div>
+        <a class="brand brand-light" href="/" aria-label="Hola Manje home">
+          <img src="/assets/logo.svg" width="36" height="36" alt="">
+          <span class="brand-name">Hola Manje</span>
+        </a>
+        <p class="footer-tag">Your money. Your time.</p>
+        <p class="footer-small">Access your earned wages before payday.</p>
+      </div>
+      <nav aria-label="Footer: product">
+        <h2>Product</h2>
+        <ul>
+          <li><a href="/how-it-works">How it works</a></li>
+          <li><a href="/for-employers">For employers</a></li>
+          <li><a href="/for-employees">For employees</a></li>
+          <li><a href="/benefits">Benefits</a></li>
+        </ul>
+      </nav>
+      <nav aria-label="Footer: help">
+        <h2>Help</h2>
+        <ul>
+          <li><a href="/faqs">FAQs</a></li>
+          <li><a href="/security-and-privacy">Security &amp; privacy</a></li>
+          <li><a href="/contact">Contact</a></li>
+        </ul>
+      </nav>
+      <nav aria-label="Footer: sign in">
+        <h2>Sign in</h2>
+        <ul>
+          <li><a href="/employer-login">Employer login</a></li>
+          <li><a href="/employee-login">Employee login</a></li>
+          <li><a href="/employer-registration">Register your company</a></li>
+        </ul>
+      </nav>
+    </div>
+    <div class="wrap footer-bottom">
+      <p>&copy; <span data-year>2026</span> Hola Manje. Made in Eswatini.</p>
+    </div>
+  </footer>
+
+  <script src="/assets/config.js"></script>
+  <script src="/assets/site.js"></script>
+</body>
+</html>

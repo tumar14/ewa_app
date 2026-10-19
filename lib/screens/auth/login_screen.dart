@@ -1,3 +1,5 @@
+import '../../widgets/brand_mark.dart';
+import '../../brand.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/firebase_providers.dart';
@@ -64,30 +66,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const SizedBox(height: 24),
-                    Container(
-                      width: 72,
-                      height: 72,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: const LinearGradient(
-                          colors: [glassBlue, glassBlueDark],
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: glassBlue.withOpacity(0.40),
-                            blurRadius: 20,
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.account_balance_wallet_outlined,
-                        color: Colors.white,
-                        size: 32,
-                      ),
-                    ),
+                    const BrandMark(size: 76),
                     const SizedBox(height: 20),
                     Text(
-                      'EWA',
+                      Brand.name,
                       style: TextStyle(
                         color: context.onSurface(),
                         fontSize: 32,
@@ -98,8 +80,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     const SizedBox(height: 6),
                     Text(
                       companyName.isNotEmpty
-                          ? '$companyName — Earned Wage Access'
-                          : 'Earned Wage Access',
+                          ? '$companyName · ${Brand.tagline}'
+                          : Brand.tagline,
                       style: TextStyle(
                         color: context.onSurface(0.55),
                         fontSize: 14,

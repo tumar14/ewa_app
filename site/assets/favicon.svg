@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Hola Manje">
+  <rect width="512" height="512" rx="116" fill="#0B1F3A"/>
+  <rect x="136" y="128" width="52" height="256" rx="26" fill="#FFFFFF"/>
+  <rect x="324" y="128" width="52" height="256" rx="26" fill="#FFFFFF"/>
+  <rect x="160" y="228" width="192" height="56" rx="28" fill="#14B8A6"/>
+  <circle cx="376" cy="136" r="30" fill="#14B8A6"/>
+</svg>

@@ -1,17 +1,30 @@
-# ewa_app
+# Hola Manje
 
-A new Flutter project.
+**Your money. Your time.** Access your earned wages before payday.
 
-## Getting Started
+Hola Manje is an earned wage access platform for employers and employees in Eswatini.
+It is a Flutter app (Android, iOS, web) on Firebase: Authentication, Firestore, Cloud Functions.
 
-This project is a starting point for a Flutter application.
+Internal names (the Dart package `ewa_app`, the Firebase project `ewa-app-cb943`, Android/iOS
+bundle IDs, Firestore collections) predate the brand and are deliberately unchanged.
 
-A few resources to get you started if this is your first Flutter project:
+## Layout
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+| Path | What it is |
+|---|---|
+| `lib/` | The app: worker, employer admin and platform admin experiences |
+| `functions/` | Cloud Functions: draws, payroll, settlements, company creation, public enquiries |
+| `site/` | The public website (static HTML/CSS/JS, no external dependencies) |
+| `scripts/build-hosting.mjs` | Builds the website and the app into one Firebase Hosting folder |
+| `firestore.rules`, `storage.rules` | Security rules |
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Common tasks
+
+```bash
+flutter analyze && flutter test                      # app checks
+cd functions && npm run build && node --test lib/    # function checks
+node scripts/build-hosting.mjs                       # assemble hosting/ (website at /, app at /app/)
+```
+
+Emulator testing: start the Firebase emulators, then run the app with
+`--dart-define=USE_EMULATORS=true`. Never deploy a build made with that flag.

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/firebase_providers.dart';
 import '../../widgets/glass_components.dart';
+import '../../providers/enquiry_providers.dart';
 import 'company_list_screen.dart';
+import 'enquiries_screen.dart';
 import 'record_payment_screen.dart';
 
 /// Root shell for the platform super-admin. Deliberately minimal and
@@ -19,6 +21,20 @@ class PlatformAdminShell extends ConsumerWidget {
       appBar: GlassAppBar(
         title: const Text('Platform Admin'),
         actions: [
+          Builder(builder: (context) {
+            final count = ref.watch(newEnquiryCountProvider);
+            return IconButton(
+              tooltip: 'Website enquiries',
+              icon: Badge(
+                isLabelVisible: count > 0,
+                label: Text('$count'),
+                child: const Icon(Icons.mark_email_unread_outlined),
+              ),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const EnquiriesScreen()),
+              ),
+            );
+          }),
           IconButton(
             tooltip: 'Record payment',
             icon: const Icon(Icons.account_balance_outlined),

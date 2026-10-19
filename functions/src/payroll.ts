@@ -110,12 +110,15 @@ export const runPayroll = onCall(async (request) => {
         .collection("time_sessions")
         .where("employeeId", "==", employeeDoc.id)
         .where("clockInTs", ">=", cycleStart)
-        .where("clockOutTs", "!=", null)
         .get();
-      const sessions: SessionSpan[] = sessionsSnap.docs.map((doc) => ({
-        clockInMs: (doc.data().clockInTs as Timestamp).toMillis(),
-        clockOutMs: (doc.data().clockOutTs as Timestamp).toMillis(),
-      }));
+      // Closed sessions only. Filtered here rather than in the query so it
+      // uses the existing (employeeId, clockInTs) index.
+      const sessions: SessionSpan[] = sessionsSnap.docs
+        .filter((doc) => doc.data().clockOutTs != null)
+        .map((doc) => ({
+          clockInMs: (doc.data().clockInTs as Timestamp).toMillis(),
+          clockOutMs: (doc.data().clockOutTs as Timestamp).toMillis(),
+        }));
       const accrued = accruedMinor(employee.hourlyRate, sessions, cycleEnd.toMillis());
 
       const drawsSnap = await companyRef

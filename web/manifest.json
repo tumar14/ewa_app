@@ -1,11 +1,11 @@
 {
-    "name": "EWA - Earned Wage Access",
-    "short_name": "EWA",
+    "name": "Hola Manje - Your money. Your time.",
+    "short_name": "Hola Manje",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "Earned wage access for FTM Garments employees.",
+    "background_color": "#FFFFFF",
+    "theme_color": "#0B1F3A",
+    "description": "Access your earned wages before payday.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

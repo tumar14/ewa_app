@@ -88,6 +88,16 @@ class DrawRepository {
         });
   }
 
+  /// The most recent requests of any status, newest first (admin Transactions).
+  Stream<List<DrawRequest>> watchAll({int limit = 300}) {
+    return _collection
+        .orderBy('createdAt', descending: true)
+        .limit(limit)
+        .snapshots()
+        .map((snap) =>
+            snap.docs.map((d) => DrawRequest.fromMap(d.id, d.data())).toList());
+  }
+
   Stream<List<DrawRequest>> watchApprovedPendingDisbursement() {
     return _collection
         .where('status', isEqualTo: DrawStatus.approved.name)

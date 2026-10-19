@@ -1,3 +1,5 @@
+import 'widgets/brand_mark.dart';
+import 'brand.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
@@ -7,6 +9,7 @@ import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'firebase_options.dart';
@@ -46,6 +49,8 @@ Future<void> main() async {
             appId: options.appId,
             messagingSenderId: options.messagingSenderId,
             projectId: 'demo-ewa-test',
+            storageBucket: options.storageBucket,
+            authDomain: options.authDomain,
           )
         : options,
   );
@@ -80,12 +85,25 @@ class EwaApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeModeProvider);
     return MaterialApp(
-      title: 'Earned Wage Access',
+      title: Brand.appTitle,
       debugShowCheckedModeBanner: false,
-      navigatorObservers: [FirebaseAnalyticsObserver(analytics: _analytics)],
+      // Web analytics loads gtag.js from the internet and holds up first paint
+      // until it arrives, which leaves a blank page on a slow or blocked link.
+      navigatorObservers: [
+        if (!kIsWeb) FirebaseAnalyticsObserver(analytics: _analytics),
+      ],
       theme: buildGlassThemeLight(),
       darkTheme: buildGlassTheme(),
       themeMode: themeMode,
+      // Android's status bar otherwise falls back to a grey that clashes with
+      // the brand. Match it to the active theme.
+      builder: (context, child) {
+        final dark = Theme.of(context).brightness == Brightness.dark;
+        return AnnotatedRegion<SystemUiOverlayStyle>(
+          value: brandStatusBarStyle(dark),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
       home: const AuthGate(),
     );
   }
@@ -316,30 +334,10 @@ class _SplashScreen extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: const LinearGradient(
-                    colors: [glassBlue, glassBlueDark],
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: glassBlue.withOpacity(0.40),
-                      blurRadius: 24,
-                    ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.account_balance_wallet_outlined,
-                  size: 38,
-                  color: Colors.white,
-                ),
-              ),
+              const BrandMark(size: 84),
               const SizedBox(height: 20),
               Text(
-                'EWA',
+                Brand.name,
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.onSurface,
                   fontSize: 32,
@@ -349,7 +347,7 @@ class _SplashScreen extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                'Earned Wage Access',
+                Brand.tagline,
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.55),
                   fontSize: 14,

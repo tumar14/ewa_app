@@ -150,6 +150,24 @@ service cloud.firestore {
       }
     }
 
+    // public_enquiries — website employer-registration and contact submissions,
+    // written only by the submitEnquiry Cloud Function. Only the platform admin
+    // can read them, and only status/handling fields can be updated; a
+    // submission never creates a company or grants any role. enquiry_rate_limits
+    // is the function's own throttle counters.
+    match /public_enquiries/{enquiryId} {
+      allow read: if isPlatformAdmin();
+      allow update: if isPlatformAdmin() &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'handledBy', 'handledAt', 'note']) &&
+        request.resource.data.status in ['new', 'handled'] &&
+        request.resource.data.handledBy == request.auth.uid;
+      allow create, delete: if false;
+    }
+    match /enquiry_rate_limits/{limitId} {
+      allow read, write: if false;
+    }
+
     // company_codes/{shortCode} -> companyId — public-read pointer so the
     // claim screen's "enter a company code" path can resolve a company
     // without listing every company. Same lookup-by-key pattern as

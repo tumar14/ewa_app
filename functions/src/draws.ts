@@ -234,7 +234,7 @@ export const decideDrawRequest = onCall(async (request) => {
     employeeId,
     approve ? "Draw Request Approved" : "Draw Request Declined",
     approve
-      ? `Your advance of E${formatMinor(amountMinor)} is approved and will be disbursed shortly.`
+      ? `Your advance of E${formatMinor(amountMinor)} is approved. Your employer's finance team will pay it out.`
       : `Your draw request of E${formatMinor(amountMinor)} was not approved this time.`,
   );
 
@@ -293,8 +293,8 @@ export const disburseDraw = onCall(async (request) => {
   await notifyEmployee(
     companyId,
     employeeId,
-    "Payment Sent",
-    `Your advance of E${formatMinor(amountMinor)} has been disbursed to your account.`,
+    "Payment recorded",
+    `Your employer's finance team has marked your advance of E${formatMinor(amountMinor)} as paid. Please check your account.`,
   );
 
   return { ok: true };
