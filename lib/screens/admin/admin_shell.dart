@@ -4,6 +4,7 @@ import '../../providers/draw_providers.dart';
 import '../../providers/firebase_providers.dart';
 import '../../theme/glass_theme.dart';
 import '../../widgets/glass_components.dart';
+import '../../widgets/sign_out_button.dart';
 import 'admin_dashboard_screen.dart';
 import 'audit_log_screen.dart';
 import 'disbursements_screen.dart';
@@ -102,7 +103,7 @@ class _MoreScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: GlassAppBar(title: const Text('More')),
+      appBar: GlassAppBar(title: const Text('More'), actions: const [SignOutButton()]),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

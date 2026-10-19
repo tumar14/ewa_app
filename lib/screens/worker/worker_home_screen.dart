@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../models/draw_request.dart';
 import '../../models/employee.dart';
+import '../../models/fee_schedule.dart';
 import '../../models/settings.dart';
 import '../../models/time_session.dart';
 import '../../providers/auth_providers.dart';
@@ -18,6 +19,7 @@ import '../../utils/currency_formatter.dart';
 import '../../utils/pay_cycle.dart';
 import '../../utils/wage_calculator.dart';
 import '../../widgets/glass_components.dart';
+import '../../widgets/sign_out_button.dart';
 import '../../widgets/skeleton.dart';
 import '../clocking/clocking_screen.dart';
 import 'worker_profile_screen.dart';
@@ -77,6 +79,7 @@ class _WorkerHomeScreenState extends ConsumerState<WorkerHomeScreen> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: GlassAppBar(
+        actions: const [SignOutButton()],
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
@@ -177,7 +180,12 @@ class _HomeHero extends ConsumerWidget {
   const _HomeHero({required this.employeeId});
 
   void _showDrawSheet(
-      BuildContext context, double maxAdditional, double feePercent) {
+      BuildContext context, double maxAdditional, AppSettings settings) {
+    // A fee table without an open top band also limits the size of one advance.
+    final tableMax = settings.feeSchedule.maxAmountMinor;
+    final maxAmount = tableMax == null
+        ? maxAdditional
+        : maxAdditional < tableMax / 100 ? maxAdditional : tableMax / 100;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -185,8 +193,11 @@ class _HomeHero extends ConsumerWidget {
       backgroundColor: Colors.transparent,
       builder: (_) => _DrawRequestSheet(
         employeeId: employeeId,
-        maxAmount: maxAdditional,
-        feePercent: feePercent,
+        maxAmount: maxAmount,
+        limitedByFeeTable: tableMax != null && tableMax / 100 < maxAdditional,
+        feeSchedule: settings.feeSchedule,
+        autoApprove: settings.autoApprove,
+        autoApproveMaxMinor: settings.autoApproveMaxMinor,
       ),
     );
   }
@@ -349,8 +360,7 @@ class _HomeHero extends ConsumerWidget {
                       : 'Request advance',
                 ),
                 onPressed: (canRequest && maxAdditional > 0 && settings != null)
-                    ? () => _showDrawSheet(
-                        context, maxAdditional, settings.feePercent)
+                    ? () => _showDrawSheet(context, maxAdditional, settings)
                     : null,
               ),
             ),
@@ -492,11 +502,17 @@ class _HeroStat extends StatelessWidget {
 class _DrawRequestSheet extends ConsumerStatefulWidget {
   final String employeeId;
   final double maxAmount;
-  final double feePercent;
+  final bool limitedByFeeTable;
+  final FeeSchedule feeSchedule;
+  final bool autoApprove;
+  final int? autoApproveMaxMinor;
   const _DrawRequestSheet({
     required this.employeeId,
     required this.maxAmount,
-    required this.feePercent,
+    required this.limitedByFeeTable,
+    required this.feeSchedule,
+    required this.autoApprove,
+    required this.autoApproveMaxMinor,
   });
 
   @override
@@ -509,6 +525,7 @@ class _DrawRequestSheetState extends ConsumerState<_DrawRequestSheet> {
   bool _confirming = false;
   bool _submitting = false;
   bool _succeeded = false;
+  bool _approvedAutomatically = false;
   String? _error;
 
   static const _chipAmounts = [50.0, 100.0, 250.0];
@@ -546,10 +563,15 @@ class _DrawRequestSheetState extends ConsumerState<_DrawRequestSheet> {
       _error = null;
     });
     try {
-      await ref
+      final status = await ref
           .read(drawRepositoryProvider)
           .requestDraw(CurrencyFormatter.toMinor(_amount));
-      if (mounted) setState(() => _succeeded = true);
+      if (mounted) {
+        setState(() {
+          _succeeded = true;
+          _approvedAutomatically = status == 'approved';
+        });
+      }
     } on FirebaseFunctionsException catch (e) {
       final detail = e.code == 'failed-precondition' ||
               e.code == 'invalid-argument' ||
@@ -572,8 +594,13 @@ class _DrawRequestSheetState extends ConsumerState<_DrawRequestSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final fee = WageCalculator.feeFor(_amount, widget.feePercent);
-    final total = _amount + fee;
+    final fee = WageCalculator.feeFor(_amount, widget.feeSchedule);
+    final total = fee == null ? null : _amount + fee;
+    // Mirrors the server: a fee larger than the amount itself is refused.
+    final feeTooBig = fee != null && fee > _amount;
+    final willAutoApprove = widget.autoApprove &&
+        (widget.autoApproveMaxMinor == null ||
+            CurrencyFormatter.toMinor(_amount) <= widget.autoApproveMaxMinor!);
 
     return Container(
       decoration: BoxDecoration(
@@ -585,6 +612,7 @@ class _DrawRequestSheetState extends ConsumerState<_DrawRequestSheet> {
       child: _succeeded
           ? _SuccessContent(
               amount: _amount,
+              approvedAutomatically: _approvedAutomatically,
               onDone: () => Navigator.of(context).pop(),
             )
           : AnimatedSwitcher(
@@ -593,8 +621,9 @@ class _DrawRequestSheetState extends ConsumerState<_DrawRequestSheet> {
                   ? _ConfirmStep(
                       key: const ValueKey('confirm'),
                       amount: _amount,
-                      fee: fee,
-                      total: total,
+                      fee: fee ?? 0,
+                      total: total ?? _amount,
+                      willAutoApprove: willAutoApprove,
                       submitting: _submitting,
                       error: _error,
                       onBack: () => setState(() => _confirming = false),
@@ -604,11 +633,12 @@ class _DrawRequestSheetState extends ConsumerState<_DrawRequestSheet> {
                       key: const ValueKey('select'),
                       amount: _amount,
                       maxAmount: widget.maxAmount,
-                      feePercent: widget.feePercent,
+                      limitedByFeeTable: widget.limitedByFeeTable,
+                      feeSchedule: widget.feeSchedule,
                       chipAmounts: _chipAmounts,
                       textCtrl: _textCtrl,
                       onAmountChanged: _setAmount,
-                      onReview: _amount > 0
+                      onReview: _amount > 0 && fee != null && !feeTooBig
                           ? () => setState(() => _confirming = true)
                           : null,
                     ),
@@ -617,10 +647,16 @@ class _DrawRequestSheetState extends ConsumerState<_DrawRequestSheet> {
   }
 }
 
+String _pct(double fraction) {
+  final p = fraction * 100;
+  return '${p.toStringAsFixed(p % 1 == 0 ? 0 : 1)}%';
+}
+
 class _SelectStep extends StatelessWidget {
   final double amount;
   final double maxAmount;
-  final double feePercent;
+  final bool limitedByFeeTable;
+  final FeeSchedule feeSchedule;
   final List<double> chipAmounts;
   final TextEditingController textCtrl;
   final ValueChanged<double> onAmountChanged;
@@ -630,7 +666,8 @@ class _SelectStep extends StatelessWidget {
     super.key,
     required this.amount,
     required this.maxAmount,
-    required this.feePercent,
+    required this.limitedByFeeTable,
+    required this.feeSchedule,
     required this.chipAmounts,
     required this.textCtrl,
     required this.onAmountChanged,
@@ -639,7 +676,7 @@ class _SelectStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fee = WageCalculator.feeFor(amount, feePercent);
+    final fee = WageCalculator.feeFor(amount, feeSchedule) ?? 0;
     final cs = Theme.of(context).colorScheme;
 
     return Column(
@@ -660,7 +697,9 @@ class _SelectStep extends StatelessWidget {
         Text('Request an advance',
             style: Theme.of(context).textTheme.titleLarge),
         Text(
-          'Available: ${CurrencyFormatter.format(maxAmount)}',
+          limitedByFeeTable
+              ? 'Largest advance: ${CurrencyFormatter.format(maxAmount)}'
+              : 'Available: ${CurrencyFormatter.format(maxAmount)}',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: cs.onSurfaceVariant,
               ),
@@ -727,7 +766,9 @@ class _SelectStep extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Service fee (${(feePercent * 100).toStringAsFixed(0)}%)',
+                feeSchedule.isPercent
+                    ? 'Service fee (${_pct(feeSchedule.percent)})'
+                    : 'Service fee',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               Text(
@@ -736,6 +777,14 @@ class _SelectStep extends StatelessWidget {
               ),
             ],
           ),
+          if (fee > amount)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                'The fee would be more than this amount. Choose a larger amount.',
+                style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.error),
+              ),
+            ),
         ],
 
         const SizedBox(height: 20),
@@ -755,6 +804,7 @@ class _ConfirmStep extends StatelessWidget {
   final double amount;
   final double fee;
   final double total;
+  final bool willAutoApprove;
   final bool submitting;
   final String? error;
   final VoidCallback onBack;
@@ -765,6 +815,7 @@ class _ConfirmStep extends StatelessWidget {
     required this.amount,
     required this.fee,
     required this.total,
+    required this.willAutoApprove,
     required this.submitting,
     this.error,
     required this.onBack,
@@ -826,6 +877,15 @@ class _ConfirmStep extends StatelessWidget {
         const SizedBox(height: 10),
         Text(
           'This amount will be deducted from your next payslip.',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: cs.onSurfaceVariant,
+              ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          willAutoApprove
+              ? 'This advance will be approved automatically if it meets your employer\'s limits.'
+              : 'Your employer will review this request before it is paid.',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: cs.onSurfaceVariant,
               ),
@@ -994,7 +1054,7 @@ class _DrawTimelineCard extends StatelessWidget {
             ),
             _TStep(
               icon: Icons.check_circle_outline,
-              label: 'Approved',
+              label: draw.autoApproved ? 'Approved automatically' : 'Approved',
               sublabel: draw.decidedAt != null
                   ? _dateFmt.format(draw.decidedAt!.toLocal())
                   : null,
@@ -1641,8 +1701,13 @@ class _PunchTile extends StatelessWidget {
 
 class _SuccessContent extends StatelessWidget {
   final double amount;
+  final bool approvedAutomatically;
   final VoidCallback onDone;
-  const _SuccessContent({required this.amount, required this.onDone});
+  const _SuccessContent({
+    required this.amount,
+    required this.approvedAutomatically,
+    required this.onDone,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1674,11 +1739,13 @@ class _SuccessContent extends StatelessWidget {
               color: glassSuccess, size: 32),
         ),
         const SizedBox(height: 16),
-        Text('Request sent!',
+        Text(approvedAutomatically ? 'Approved!' : 'Request sent!',
             style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 6),
         Text(
-          '${CurrencyFormatter.format(amount)} advance requested',
+          approvedAutomatically
+              ? '${CurrencyFormatter.format(amount)} advance approved'
+              : '${CurrencyFormatter.format(amount)} advance requested',
           style: Theme.of(context)
               .textTheme
               .bodyMedium
@@ -1686,7 +1753,9 @@ class _SuccessContent extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         Text(
-          'Usually reviewed within a few hours.\nYou\'ll be notified when it\'s approved.',
+          approvedAutomatically
+              ? 'It was approved automatically.\nYour employer\'s finance team will pay it out.'
+              : 'Usually reviewed within a few hours.\nYou\'ll be notified when it\'s approved.',
           style: Theme.of(context)
               .textTheme
               .bodySmall

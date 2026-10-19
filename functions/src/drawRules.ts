@@ -3,6 +3,7 @@
 // All money here is an integer number of minor units (cents of a lilangeni); the
 // only floats are rates and percentages, rounded once when converted.
 // No Firebase imports: unit-tested in drawRules.test.ts.
+import { FeeSchedule, feeFor, maxAmountMinor } from "./feeSchedule";
 
 export type PaydayType = "fixedDayOfMonth" | "lastDayOfMonth" | "lastWeekdayOfMonth";
 
@@ -14,8 +15,9 @@ export interface PaydayRule {
 
 export interface DrawLimits {
   maxDrawPercent: number;
-  feePercent: number;
   maxDrawsPerCycle: number;
+  /** How the service fee is worked out (percentage or a tariff table). Must be valid. */
+  fee: FeeSchedule;
 }
 
 // Eswatini is UTC+2 year-round (no DST). Cycle boundaries are local midnight.
@@ -125,7 +127,16 @@ export function checkNewDraw(args: {
     };
   }
 
-  const feeMinor = Math.round(amountMinor * limits.feePercent);
+  const feeMinor = feeFor(limits.fee, amountMinor);
+  if (feeMinor === null) {
+    return {
+      ok: false,
+      reason: `That amount is above the largest this company's fee table covers (maximum ${formatMinor(maxAmountMinor(limits.fee) ?? 0)}).`,
+    };
+  }
+  if (feeMinor > amountMinor) {
+    return { ok: false, reason: "The fee for such a small amount would be more than the amount itself. Choose a larger amount." };
+  }
   return { ok: true, feeMinor, totalMinor: amountMinor + feeMinor };
 }
 

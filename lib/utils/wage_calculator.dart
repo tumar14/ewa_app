@@ -1,4 +1,5 @@
 import '../models/draw_request.dart';
+import '../models/fee_schedule.dart';
 
 /// Pure wage-accrual and draw-eligibility math. No Firebase, no I/O —
 /// keep this unit-testable and the single source of truth for the
@@ -43,9 +44,16 @@ class WageCalculator {
 
   /// Fee charged on a draw, fixed at request time (section 3: no
   /// late/compounding fees — repayment is automatic via payroll deduction).
-  static double feeFor(double amount, double feePercent) => amount * feePercent;
+  /// Null when the amount is outside the company's fee table. The server works
+  /// out the real fee; this is the preview the worker sees before confirming.
+  static double? feeFor(double amount, FeeSchedule schedule) {
+    final minor = schedule.feeMinorFor((amount * 100).round());
+    return minor == null ? null : minor / 100;
+  }
 
   /// Total deducted at next payday: amount received + fee.
-  static double totalOwed(double amount, double feePercent) =>
-      amount + feeFor(amount, feePercent);
+  static double? totalOwed(double amount, FeeSchedule schedule) {
+    final fee = feeFor(amount, schedule);
+    return fee == null ? null : amount + fee;
+  }
 }

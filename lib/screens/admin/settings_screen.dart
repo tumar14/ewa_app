@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter/services.dart';
 import '../../models/employee.dart';
+import '../../models/fee_schedule.dart';
 import '../../models/settings.dart';
 import '../../providers/settings_providers.dart';
 import '../../providers/firebase_providers.dart';
 import '../../providers/theme_providers.dart';
 import '../../theme/glass_theme.dart';
+import '../../utils/currency_formatter.dart';
 import '../../utils/pay_cycle.dart';
 import '../../widgets/glass_components.dart';
+import 'fee_schedule_editor.dart';
 import 'org_config_screen.dart';
 import 'permissions_screen.dart';
 import 'rate_matrix_screen.dart';
@@ -46,7 +50,11 @@ class _SettingsForm extends ConsumerStatefulWidget {
 class _SettingsFormState extends ConsumerState<_SettingsForm> {
   late final TextEditingController _companyNameCtrl;
   late double _maxDrawPercent;
-  late double _feePercent;
+  late FeeSchedule _feeSchedule;
+  String? _feeProblem;
+  late bool _autoApprove;
+  late bool _hasCeiling;
+  late final TextEditingController _ceilingCtrl;
   late int _maxDrawsPerCycle;
   late ClockSource _clockSource;
   late DisbursementMethod _disbursementPolicy;
@@ -59,7 +67,15 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
     super.initState();
     _companyNameCtrl = TextEditingController(text: widget.settings.companyName);
     _maxDrawPercent = widget.settings.maxDrawPercent;
-    _feePercent = widget.settings.feePercent;
+    _feeSchedule = widget.settings.feeSchedule;
+    _autoApprove = widget.settings.autoApprove;
+    _hasCeiling = widget.settings.autoApproveMaxMinor != null;
+    _ceilingCtrl = TextEditingController(
+      text: widget.settings.autoApproveMaxMinor == null
+          ? ''
+          : (widget.settings.autoApproveMaxMinor! / 100).toStringAsFixed(
+              widget.settings.autoApproveMaxMinor! % 100 == 0 ? 0 : 2),
+    );
     _maxDrawsPerCycle = widget.settings.maxDrawsPerCycle;
     _clockSource = widget.settings.clockSource;
     _disbursementPolicy = widget.settings.disbursementPolicy;
@@ -69,18 +85,33 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
   @override
   void dispose() {
     _companyNameCtrl.dispose();
+    _ceilingCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _save() async {
+    void refuse(String message) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    }
+
+    if (_feeProblem != null) return refuse('Fix the service fee first: $_feeProblem');
+    int? ceiling;
+    if (_autoApprove && _hasCeiling) {
+      ceiling = CurrencyFormatter.parseMinor(_ceilingCtrl.text);
+      if (ceiling == null || ceiling <= 0) {
+        return refuse('Enter the automatic approval ceiling as an amount, like 200 or 200.00.');
+      }
+    }
     await ref.read(settingsRepositoryProvider).update(AppSettings(
           companyName: _companyNameCtrl.text.trim(),
           maxDrawPercent: _maxDrawPercent,
-          feePercent: _feePercent,
+          feeSchedule: _feeSchedule,
           maxDrawsPerCycle: _maxDrawsPerCycle,
           clockSource: _clockSource,
           disbursementPolicy: _disbursementPolicy,
           paydayRule: _paydayRule,
+          autoApprove: _autoApprove,
+          autoApproveMaxMinor: _autoApprove && _hasCeiling ? ceiling : null,
         ));
     if (mounted) {
       ScaffoldMessenger.of(context)
@@ -290,19 +321,6 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Service fee: ${(_feePercent * 100).toStringAsFixed(1)}%',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              Slider(
-                value: _feePercent,
-                min: 0.0,
-                max: 0.15,
-                divisions: 30,
-                label: '${(_feePercent * 100).toStringAsFixed(1)}%',
-                onChanged: (v) => setState(() => _feePercent = v),
-              ),
-              const SizedBox(height: 8),
-              Text(
                 'Max draws per pay cycle: $_maxDrawsPerCycle',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
@@ -314,6 +332,72 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
                 label: '$_maxDrawsPerCycle',
                 onChanged: (v) => setState(() => _maxDrawsPerCycle = v.round()),
               ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // ── Service fee ─────────────────────────────────────────────────────
+        _SectionLabel('Service fee'),
+        GlassCard(
+          radius: 16,
+          padding: const EdgeInsets.all(16),
+          child: FeeScheduleEditor(
+            initial: _feeSchedule,
+            onChanged: (schedule, problem) {
+              _feeSchedule = schedule;
+              if (_feeProblem != problem && mounted) {
+                setState(() => _feeProblem = problem);
+              } else {
+                _feeProblem = problem;
+              }
+            },
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // ── Automatic approval ──────────────────────────────────────────────
+        _SectionLabel('Automatic approval'),
+        GlassCard(
+          radius: 16,
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Approve requests automatically'),
+                subtitle: const Text(
+                  'A request that passes every limit above is approved without a person. '
+                  'Paying it out is still done by your finance team, and every automatic '
+                  'approval is recorded in the audit log.',
+                ),
+                value: _autoApprove,
+                onChanged: (v) => setState(() => _autoApprove = v),
+              ),
+              if (_autoApprove) ...[
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Only up to a ceiling'),
+                  subtitle: const Text('Larger requests wait for a person to approve them.'),
+                  value: _hasCeiling,
+                  onChanged: (v) => setState(() => _hasCeiling = v),
+                ),
+                if (_hasCeiling)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: TextField(
+                      controller: _ceilingCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+                      decoration: const InputDecoration(
+                        labelText: 'Approve automatically up to',
+                        prefixText: 'E ',
+                        helperText: 'The advance amount, before the fee.',
+                      ),
+                    ),
+                  ),
+              ],
             ],
           ),
         ),

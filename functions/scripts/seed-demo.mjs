@@ -25,6 +25,7 @@ import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
 import { accruedMinor, currentCycleStartMs, formatMinor } from "../lib/drawRules.js";
 import { outstandingMinor, reconcile, settlementReference, settlementStatus } from "../lib/settlementRules.js";
+import { feeFor, parseFeeSchedule } from "../lib/feeSchedule.js";
 import { DEFAULT_DEPARTMENTS, DEFAULT_PERMISSIONS, DEFAULT_ROLES, defaultAppSettings } from "../lib/defaults.js";
 
 const SEED_TAG = "hola-manje-demo-v1";
@@ -91,6 +92,8 @@ const COMPANIES = [
       { name: "Phindile Zwane", empNo: "DG-203", dept: "Packing", rate: 33.5 },
     ],
     priorCycleSettlement: ["thandi.worker", "bongani.worker", "lindiwe.worker"],
+    // 5% fee, a person approves every request (the defaults).
+    settings: {},
   },
   {
     id: "demo_textiles", name: "Sample Textiles (TEST)", shortCode: "DEMOTX", hrEmail: `hr.textiles@${EMAIL_DOMAIN}`, hrPhone: "TEST-0001",
@@ -98,10 +101,23 @@ const COMPANIES = [
       { slug: "themba.admin", name: "Themba Shongwe", role: "admin", dept: "Administration", empNo: "ST-001", rate: 0 },
       { slug: "nelisiwe.worker", name: "Nelisiwe Motsa", role: "worker", dept: "Sewing", empNo: "ST-101", rate: 39, bank: "FNB", draws: ["pending"], clockedIn: true },
       { slug: "vusi.worker", name: "Vusi Ginindza", role: "worker", dept: "Finishing", empNo: "ST-102", rate: 35.5, mobile: "MTN MoMo", draws: ["paid"] },
-      { slug: "ayanda.worker", name: "Ayanda Masuku", role: "worker", dept: "Packing", empNo: "ST-103", rate: 33, bank: "Standard Bank", draws: [] },
+      { slug: "ayanda.worker", name: "Ayanda Masuku", role: "worker", dept: "Packing", empNo: "ST-103", rate: 33, bank: "Standard Bank", draws: ["auto"] },
     ],
     roster: [{ name: "Fikile Tsabedze", empNo: "ST-201", dept: "Sewing", rate: 36 }],
     priorCycleSettlement: [],
+    // A mobile-money style tariff table instead of a percentage, and requests up
+    // to E100 are approved automatically (anything larger waits for a person).
+    settings: {
+      feeMode: "tiered",
+      feeTiers: [
+        { upToMinor: 5_000, flatMinor: 100, percent: 0 },
+        { upToMinor: 20_000, flatMinor: 300, percent: 0 },
+        { upToMinor: 100_000, flatMinor: 600, percent: 0.005 },
+        { upToMinor: null, flatMinor: 0, percent: 0.015 },
+      ],
+      autoApprove: true,
+      autoApproveMaxMinor: 10_000,
+    },
   },
 ];
 
@@ -122,7 +138,6 @@ const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const newClaimCode = () => Array.from({ length: 6 }, () => CODE_ALPHABET[randomInt(CODE_ALPHABET.length)]).join("");
 const ts = (ms) => Timestamp.fromMillis(ms);
 const wholeE = (minor) => Math.floor(minor / 100) * 100;
-const feeOf = (amountMinor) => Math.round(amountMinor * 0.05);
 
 async function findDemoCompanies() {
   const snap = await db.collection("companies").where("demoSeed", "==", SEED_TAG).get();
@@ -218,12 +233,14 @@ for (const company of COMPANIES) {
   await db.collection("company_codes").doc(company.shortCode).set({ companyId: company.id });
   await companyRef.collection("settings").doc("org").set({ departments: DEFAULT_DEPARTMENTS, roles: DEFAULT_ROLES });
   await companyRef.collection("settings").doc("rates").set({});
-  await companyRef.collection("settings").doc("app").set(defaultAppSettings(company.name));
+  const settings = { ...defaultAppSettings(company.name), ...company.settings };
+  await companyRef.collection("settings").doc("app").set(settings);
+  const feeSchedule = parseFeeSchedule(settings);
+  const feeOf = (amountMinor) => feeFor(feeSchedule, amountMinor);
   await companyRef.collection("settings").doc("permissions").set(DEFAULT_PERMISSIONS);
   summary.companies++;
 
   const writer = db.bulkWriter();
-  const settings = defaultAppSettings(company.name);
   const adminUid = uidFor(adminSlug);
   const people = [];
 
@@ -265,7 +282,7 @@ for (const company of COMPANIES) {
   for (const p of people) {
     if (!p.draws?.length) continue;
     const cap = Math.floor(accruedOf(p) * settings.maxDrawPercent);
-    const shares = { paid: 0.25, pending: p.draws.length > 1 ? 0.25 : 0.4, approved: 0.4, rejected: 0.3 };
+    const shares = { paid: 0.25, pending: p.draws.length > 1 ? 0.25 : 0.4, approved: 0.4, rejected: 0.3, auto: 0.2 };
     for (const [k, state] of p.draws.entries()) {
       const amountMinor = wholeE(cap * shares[state]);
       if (amountMinor < 500) continue; // too little earned yet this cycle
@@ -276,13 +293,18 @@ for (const company of COMPANIES) {
         decidedBy: null, decidedAt: null, payrollRunId: null, disbursementStatus: null, disbursedAt: null, disbursementRef: null, reason: null,
       };
       const id = `${company.id}_draw_${++drawSeq}`;
-      if (state !== "pending") { doc.decidedBy = adminUid; doc.decidedAt = ts(createdAt + 2 * HOUR); }
+      if (state !== "pending" && state !== "auto") { doc.decidedBy = adminUid; doc.decidedAt = ts(createdAt + 2 * HOUR); }
       if (state === "approved") { doc.status = "approved"; doc.disbursementStatus = "pending"; }
+      if (state === "auto") {
+        doc.status = "approved"; doc.disbursementStatus = "pending"; doc.autoApproved = true;
+        doc.decidedBy = "policy"; doc.decidedAt = ts(createdAt);
+      }
       if (state === "paid") { doc.status = "approved"; doc.disbursementStatus = "completed"; doc.disbursedAt = ts(createdAt + 5 * HOUR); doc.disbursementRef = `DISP-${id.slice(-8).toUpperCase()}`; }
       if (state === "rejected") { doc.status = "rejected"; doc.reason = "Please request a smaller amount until timesheets are signed off."; }
       writer.create(companyRef.collection("draw_requests").doc(id), doc);
       writer.create(companyRef.collection("audit_log").doc(), { type: "draw_request", requestId: id, employeeId: p.uid, amountMinor, feeMinor, timestamp: ts(createdAt) });
-      if (state !== "pending") writer.create(companyRef.collection("audit_log").doc(), { type: "draw_decision", requestId: id, employeeId: p.uid, amountMinor, approved: state !== "rejected", decidedBy: adminUid, decidedAt: ts(createdAt + 2 * HOUR), timestamp: ts(createdAt + 2 * HOUR) });
+      if (state === "auto") writer.create(companyRef.collection("audit_log").doc(), { type: "draw_decision", requestId: id, employeeId: p.uid, amountMinor, approved: true, auto: true, decidedBy: "policy", decidedAt: ts(createdAt), autoApproveCeilingMinor: settings.autoApproveMaxMinor, timestamp: ts(createdAt) });
+      else if (state !== "pending") writer.create(companyRef.collection("audit_log").doc(), { type: "draw_decision", requestId: id, employeeId: p.uid, amountMinor, approved: state !== "rejected", decidedBy: adminUid, decidedAt: ts(createdAt + 2 * HOUR), timestamp: ts(createdAt + 2 * HOUR) });
       if (state === "paid") writer.create(companyRef.collection("audit_log").doc(), { type: "disbursement", requestId: id, employeeId: p.uid, amountMinor, disbursementRef: doc.disbursementRef, disbursedBy: adminUid, disbursedAt: ts(createdAt + 5 * HOUR), timestamp: ts(createdAt + 5 * HOUR) });
       summary.draws++;
     }

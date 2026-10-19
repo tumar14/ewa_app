@@ -57,3 +57,22 @@ exception, unclaimed seats, website enquiries, and a demo platform admin (emulat
 
 The same script can fill the live project (`--target live --yes`, test data tagged and
 removable with `--remove`), but without Blaze you could only look at the data there.
+
+## Service fees and automatic approval
+
+Management sets both in **Admin Settings** (stored in the company's `settings/app` document):
+
+- **Service fee**: a percentage, or a *tariff table* of amount bands (like a mobile-money tariff). Each
+  band has an upper limit, a flat fee and an optional percentage on top. A table without an open top
+  band also caps the size of one advance. The server works out the fee when the advance is requested
+  and stores it on the advance, so it never changes afterwards.
+- **Automatic approval**: off by default. When on, a request that passes every limit (earned-wages cap,
+  advances per cycle, fee table) is approved by the server without a person, optionally only up to a
+  ceiling. Paying out is still done by finance, and every automatic approval is written to the audit log.
+  Anything unclear (a bad ceiling, a flag that is not exactly `true`) means a person decides.
+- The rules live in `functions/src/feeSchedule.ts`; the app's preview in `lib/models/fee_schedule.dart`
+  mirrors it and both are tested with the same cases. Demo data: Demo Garments uses 5% with manual
+  approval; Sample Textiles uses a tariff table with automatic approval up to E100.
+- Settings are written by the admin app directly, so the server re-validates the fee schedule on
+  every request and refuses to charge anything if it is invalid.
+

@@ -49,8 +49,14 @@ class DrawRepository {
   /// Asks the server to create a pending request for [amountMinor] cents. Fee
   /// and limits are computed server-side; throws [FirebaseFunctionsException]
   /// with a user-readable message when a limit is exceeded.
-  Future<void> requestDraw(int amountMinor) async {
-    await _functions.httpsCallable('requestDraw').call({'amountMinor': amountMinor});
+  ///
+  /// Returns the new request's status: 'approved' when the company approves
+  /// automatically, otherwise 'pending'.
+  Future<String> requestDraw(int amountMinor) async {
+    final result =
+        await _functions.httpsCallable('requestDraw').call({'amountMinor': amountMinor});
+    final data = result.data;
+    return data is Map ? (data['status'] as String? ?? 'pending') : 'pending';
   }
 
   Future<void> decide({

@@ -1,4 +1,5 @@
 import 'employee.dart';
+import 'fee_schedule.dart';
 
 // ── Payday rule ───────────────────────────────────────────────────────────────
 
@@ -59,27 +60,38 @@ class PaydayRule {
 class AppSettings {
   final String companyName;
   final double maxDrawPercent;
-  final double feePercent;
+
+  /// How the service fee is charged: a percentage or a tariff table by amount.
+  final FeeSchedule feeSchedule;
   final int maxDrawsPerCycle;
   final ClockSource clockSource;
   final DisbursementMethod disbursementPolicy;
   final PaydayRule paydayRule;
 
+  /// When on, the server approves a request that passes every check without a
+  /// person. Paying it out is still done by the employer's finance team.
+  final bool autoApprove;
+
+  /// Largest advance (cents) approved automatically; null means no ceiling.
+  final int? autoApproveMaxMinor;
+
   AppSettings({
     this.companyName = '',
     this.maxDrawPercent = 0.5,
-    this.feePercent = 0.05,
+    this.feeSchedule = const FeeSchedule.percent(0.05),
     this.maxDrawsPerCycle = 2,
     this.clockSource = ClockSource.manual,
     this.disbursementPolicy = DisbursementMethod.bankTransfer,
     this.paydayRule = const PaydayRule(),
+    this.autoApprove = false,
+    this.autoApproveMaxMinor,
   });
 
   factory AppSettings.fromMap(Map<String, dynamic> map) {
     return AppSettings(
       companyName: map['companyName'] as String? ?? '',
       maxDrawPercent: (map['maxDrawPercent'] as num?)?.toDouble() ?? 0.5,
-      feePercent: (map['feePercent'] as num?)?.toDouble() ?? 0.05,
+      feeSchedule: FeeSchedule.fromMap(map),
       maxDrawsPerCycle: (map['maxDrawsPerCycle'] as num?)?.toInt() ?? 2,
       clockSource: ClockSource.values.firstWhere(
         (e) => e.name == map['clockSource'],
@@ -91,36 +103,45 @@ class AppSettings {
       ),
       paydayRule: PaydayRule.fromMap(
           map['paydayRule'] as Map<String, dynamic>?),
+      autoApprove: map['autoApprove'] == true,
+      autoApproveMaxMinor: (map['autoApproveMaxMinor'] as num?)?.toInt(),
     );
   }
 
   Map<String, dynamic> toMap() => {
         'companyName': companyName,
         'maxDrawPercent': maxDrawPercent,
-        'feePercent': feePercent,
+        ...feeSchedule.toMap(),
         'maxDrawsPerCycle': maxDrawsPerCycle,
         'clockSource': clockSource.name,
         'disbursementPolicy': disbursementPolicy.name,
         'paydayRule': paydayRule.toMap(),
+        'autoApprove': autoApprove,
+        'autoApproveMaxMinor': autoApproveMaxMinor,
       };
 
   AppSettings copyWith({
     String? companyName,
     double? maxDrawPercent,
-    double? feePercent,
+    FeeSchedule? feeSchedule,
     int? maxDrawsPerCycle,
     ClockSource? clockSource,
     DisbursementMethod? disbursementPolicy,
     PaydayRule? paydayRule,
+    bool? autoApprove,
+    int? autoApproveMaxMinor,
+    bool clearAutoApproveMax = false,
   }) {
     return AppSettings(
       companyName: companyName ?? this.companyName,
       maxDrawPercent: maxDrawPercent ?? this.maxDrawPercent,
-      feePercent: feePercent ?? this.feePercent,
+      feeSchedule: feeSchedule ?? this.feeSchedule,
       maxDrawsPerCycle: maxDrawsPerCycle ?? this.maxDrawsPerCycle,
       clockSource: clockSource ?? this.clockSource,
       disbursementPolicy: disbursementPolicy ?? this.disbursementPolicy,
       paydayRule: paydayRule ?? this.paydayRule,
+      autoApprove: autoApprove ?? this.autoApprove,
+      autoApproveMaxMinor: clearAutoApproveMax ? null : (autoApproveMaxMinor ?? this.autoApproveMaxMinor),
     );
   }
 }

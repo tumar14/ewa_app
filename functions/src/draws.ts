@@ -19,6 +19,7 @@ import {
   formatMinor,
   withinCap,
 } from "./drawRules";
+import { AutoApprovePolicy, parseAutoApprove, parseFeeSchedule, shouldAutoApprove, validateFeeSchedule } from "./feeSchedule";
 
 interface DrawContext {
   hourlyRate: number;
@@ -26,6 +27,7 @@ interface DrawContext {
   rule: PaydayRule;
   sessions: SessionSpan[];
   outstanding: Array<{ id: string; amountMinor: number; createdAtMs: number }>;
+  autoApprove: AutoApprovePolicy;
 }
 
 /**
@@ -55,10 +57,18 @@ async function readDrawContext(
 
   const settings = { ...defaults, ...(settingsSnap.data() ?? {}) };
   const rule = { ...defaults.paydayRule, ...(settings.paydayRule ?? {}) } as PaydayRule;
+  const fee = parseFeeSchedule(settings);
+  if (validateFeeSchedule(fee) !== null) {
+    // Settings are written straight from the admin app, so never trust them blindly.
+    throw new HttpsError(
+      "failed-precondition",
+      "This company's fee schedule is not set up correctly. Please contact HR.",
+    );
+  }
   const limits: DrawLimits = {
     maxDrawPercent: Number(settings.maxDrawPercent),
-    feePercent: Number(settings.feePercent),
     maxDrawsPerCycle: Number(settings.maxDrawsPerCycle),
+    fee,
   };
   const startMs = cycleStartMs(rule);
 
@@ -87,7 +97,7 @@ async function readDrawContext(
       createdAtMs: (doc.data().createdAt as Timestamp | undefined)?.toMillis() ?? 0,
     }));
 
-  return { hourlyRate: employee.hourlyRate, limits, rule, sessions, outstanding };
+  return { hourlyRate: employee.hourlyRate, limits, rule, sessions, outstanding, autoApprove: parseAutoApprove(settings) };
 }
 
 /**
@@ -122,17 +132,22 @@ export const requestDraw = onCall(async (request) => {
     if (!check.ok) throw new HttpsError("failed-precondition", check.reason);
 
     const now = Timestamp.fromMillis(nowMs);
+    // The request already passed every check above (limits, cap, fee). If the
+    // company allows it, that is all a person would have verified, so approve it
+    // by policy. Paying it out stays a person's job (disburseDraw).
+    const auto = shouldAutoApprove(ctx.autoApprove, amountMinor);
     tx.set(drawRef, {
       employeeId: uid,
       amountMinor,
       feeMinor: check.feeMinor,
       totalMinor: check.totalMinor,
-      status: "pending",
+      status: auto ? "approved" : "pending",
+      autoApproved: auto,
       createdAt: now,
-      decidedBy: null,
-      decidedAt: null,
+      decidedBy: auto ? "policy" : null,
+      decidedAt: auto ? now : null,
       payrollRunId: null,
-      disbursementStatus: null,
+      disbursementStatus: auto ? "pending" : null,
       disbursedAt: null,
       disbursementRef: null,
       reason: null,
@@ -140,7 +155,8 @@ export const requestDraw = onCall(async (request) => {
     // Writing the employee doc makes two simultaneous requests from the same
     // person conflict, so the cap and count checks cannot both pass on stale data.
     tx.update(employeeRef, { drawRequestSeq: FieldValue.increment(1) });
-    tx.set(companyRef.collection("audit_log").doc(), {
+    const audit = companyRef.collection("audit_log");
+    tx.set(audit.doc(), {
       type: "draw_request",
       requestId: drawRef.id,
       employeeId: uid,
@@ -148,8 +164,31 @@ export const requestDraw = onCall(async (request) => {
       feeMinor: check.feeMinor,
       timestamp: now,
     });
-    return { feeMinor: check.feeMinor, totalMinor: check.totalMinor };
+    if (auto) {
+      tx.set(audit.doc(), {
+        type: "draw_decision",
+        requestId: drawRef.id,
+        employeeId: uid,
+        amountMinor,
+        approved: true,
+        auto: true,
+        decidedBy: "policy",
+        decidedAt: now,
+        autoApproveCeilingMinor: ctx.autoApprove.maxMinor,
+        timestamp: now,
+      });
+    }
+    return { feeMinor: check.feeMinor, totalMinor: check.totalMinor, status: auto ? "approved" : "pending", amountMinor };
   });
+
+  if (result.status === "approved") {
+    await notifyEmployee(
+      companyId,
+      uid,
+      "Advance approved",
+      `Your advance of E${formatMinor(result.amountMinor)} was approved automatically. Your employer's finance team will pay it out.`,
+    );
+  }
 
   return { ok: true, requestId: drawRef.id, ...result };
 });

@@ -54,7 +54,8 @@ class AuditLogEntry {
         return 'Draw of E${_money('amountMinor')} requested by ${employeeId ?? ''}';
       case 'draw_decision':
         final approved = data['approved'] == true;
-        return '${approved ? 'Approved' : 'Declined'} draw of E${_money('amountMinor')} for ${employeeId ?? ''}';
+        final by = data['auto'] == true ? ' (automatically, by company policy)' : '';
+        return '${approved ? 'Approved' : 'Declined'}$by draw of E${_money('amountMinor')} for ${employeeId ?? ''}';
       case 'disbursement':
         return 'Disbursed E${_money('amountMinor')} to ${employeeId ?? ''} (${data['disbursementRef'] ?? ''})';
       case 'payroll_run':

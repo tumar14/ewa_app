@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ewa_app/models/draw_request.dart';
+import 'package:ewa_app/models/fee_schedule.dart';
 import 'package:ewa_app/utils/wage_calculator.dart';
 
 DrawRequest _draw({
@@ -158,20 +159,20 @@ void main() {
 
   group('fees', () {
     test('feeFor: amount * feePercent', () {
-      expect(WageCalculator.feeFor(500, 0.05), 25.0);
+      expect(WageCalculator.feeFor(500, const FeeSchedule.percent(0.05)), 25.0);
     });
 
     test('totalOwed: amount + fee', () {
-      expect(WageCalculator.totalOwed(500, 0.05), 525.0);
+      expect(WageCalculator.totalOwed(500, const FeeSchedule.percent(0.05)), 525.0);
     });
 
     test('zero-fee draw: totalOwed equals amount', () {
-      expect(WageCalculator.totalOwed(300, 0.0), 300.0);
+      expect(WageCalculator.totalOwed(300, const FeeSchedule.percent(0)), 300.0);
     });
 
     test('zero amount: fee and total are both zero', () {
-      expect(WageCalculator.feeFor(0, 0.05), 0.0);
-      expect(WageCalculator.totalOwed(0, 0.05), 0.0);
+      expect(WageCalculator.feeFor(0, const FeeSchedule.percent(0.05)), 0.0);
+      expect(WageCalculator.totalOwed(0, const FeeSchedule.percent(0.05)), 0.0);
     });
   });
 }

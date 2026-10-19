@@ -38,7 +38,7 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
     if (d.status == DrawStatus.rejected) return ('Declined', glassDanger);
     if (d.status == DrawStatus.pending) return ('Pending', glassWarning);
     if (_isPaid(d)) return ('Paid', glassSuccess);
-    return ('Approved, to be paid', glassBlue);
+    return (d.autoApproved ? 'Auto-approved, to be paid' : 'Approved, to be paid', glassBlue);
   }
 
   void _copyCsv(List<DrawRequest> list) {

@@ -1,3 +1,4 @@
+import '../../widgets/sign_out_button.dart';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -52,6 +53,7 @@ class AdminDashboardScreen extends ConsumerWidget {
       appBar: GlassAppBar(
         title: const Text('Dashboard'),
         actions: [
+          const SignOutButton(),
           IconButton(
             icon: const Icon(Icons.person_add_outlined),
             tooltip: 'Add employee',

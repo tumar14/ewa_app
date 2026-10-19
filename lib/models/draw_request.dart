@@ -15,6 +15,9 @@ class DrawRequest {
   final DrawStatus status;
   final DateTime createdAt;
   final String? decidedBy;
+
+  /// True when the server approved it by company policy rather than a person.
+  final bool autoApproved;
   final DateTime? decidedAt;
   /// Set once a payroll run has deducted this draw from payout. Null means
   /// "still outstanding" — counts against the worker's per-cycle cap.
@@ -33,6 +36,7 @@ class DrawRequest {
     required this.createdAt,
     this.status = DrawStatus.pending,
     this.decidedBy,
+    this.autoApproved = false,
     this.decidedAt,
     this.payrollRunId,
     this.disbursementStatus,
@@ -54,6 +58,7 @@ class DrawRequest {
       ),
       createdAt: (map['createdAt'] as Timestamp).toDate(),
       decidedBy: map['decidedBy'] as String?,
+      autoApproved: map['autoApproved'] == true,
       decidedAt: (map['decidedAt'] as Timestamp?)?.toDate(),
       payrollRunId: map['payrollRunId'] as String?,
       disbursementStatus: map['disbursementStatus'] == null

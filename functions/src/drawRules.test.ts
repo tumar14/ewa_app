@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  DrawLimits,
   PaydayRule,
   accruedMinor,
   checkNewDraw,
@@ -62,8 +63,8 @@ test("accrued: fractional hourly rate rounds once to the nearest cent", () => {
   assert.equal(accruedMinor(33.33, sessions, 0), 1111); // 33.33 * 20/60 = 11.11
 });
 
-const limits = { maxDrawPercent: 0.5, feePercent: 0.05, maxDrawsPerCycle: 2 };
-const draw = (amountMinor: number, accrued: number, outstanding: number[] = [], l = limits) =>
+const limits = { maxDrawPercent: 0.5, maxDrawsPerCycle: 2, fee: { mode: "percent" as const, percent: 0.05 } };
+const draw = (amountMinor: number, accrued: number, outstanding: number[] = [], l: DrawLimits = limits) =>
   checkNewDraw({ amountMinor, accruedMinor: accrued, limits: l, outstanding: outstanding.map((a) => ({ amountMinor: a })) });
 
 test("draw: exactly the cap is allowed and fee is fixed", () => {
@@ -98,7 +99,7 @@ test("draw: fee is rounded to a whole cent", () => {
 });
 
 test("draw: cap uses the same rounding at an awkward fraction", () => {
-  const thirds = { maxDrawPercent: 0.3, feePercent: 0.05, maxDrawsPerCycle: 2 };
+  const thirds = { ...limits, maxDrawPercent: 0.3 };
   assert.equal(draw(3_000, 10_000, [], thirds).ok, true);
   assert.equal(draw(3_001, 10_000, [], thirds).ok, false);
 });
@@ -107,4 +108,26 @@ test("withinCap and formatMinor", () => {
   assert.equal(withinCap(40_000, 0.5, 20_000), true);
   assert.equal(withinCap(40_000, 0.5, 20_001), false);
   assert.equal(formatMinor(12_345), "123.45");
+});
+
+const tiered = {
+  ...limits,
+  fee: { mode: "tiered" as const, tiers: [{ upToMinor: 5_000, flatMinor: 100, percent: 0 }, { upToMinor: 20_000, flatMinor: 300, percent: 0 }] },
+};
+
+test("draw: a tariff table sets the fee by band", () => {
+  assert.deepEqual(draw(5_000, 100_000, [], tiered), { ok: true, feeMinor: 100, totalMinor: 5_100 });
+  assert.deepEqual(draw(5_001, 100_000, [], tiered), { ok: true, feeMinor: 300, totalMinor: 5_301 });
+});
+
+test("draw: above the highest band of a capped tariff is refused with the maximum", () => {
+  const r = draw(20_001, 1_000_000, [], tiered);
+  assert.equal(r.ok, false);
+  if (!r.ok) assert.match(r.reason, /maximum 200\.00/);
+});
+
+test("draw: a fee larger than the amount is refused", () => {
+  const r = draw(50, 100_000, [], tiered); // E0.50 would cost E1 in fees
+  assert.equal(r.ok, false);
+  if (!r.ok) assert.match(r.reason, /more than the amount/);
 });
