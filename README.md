@@ -28,3 +28,32 @@ node scripts/build-hosting.mjs                       # assemble hosting/ (websit
 
 Emulator testing: start the Firebase emulators, then run the app with
 `--dart-define=USE_EMULATORS=true`. Never deploy a build made with that flag.
+
+## Testing without the Blaze plan (demo data)
+
+The Cloud Functions need Blaze, so on the live project you cannot request, approve or
+pay advances, run payroll, or create companies. The local emulators run the same functions
+for free, so test there with demo data.
+
+1. Start the emulators and leave the window open:
+   `.\scripts\demo-backend.ps1`
+   (needs Java 21; on the first run it prints a `winget` command if it is missing).
+2. First time only, if `emulator-data/` does not exist, seed in a second window:
+   `cd functions; npm run build; node scripts\seed-demo.mjs --target emulator`
+   Re-run the same command any time to reset the demo data (times in it are relative to now).
+3. Run the app against the emulators. Never use these builds for real people:
+   - BlueStacks / Android: `flutter build apk --debug --dart-define=USE_EMULATORS=true`, then install it.
+   - Browser: `flutter run -d chrome --dart-define=USE_EMULATORS=true`
+   Rebuild **without** the flag to go back to the live project.
+4. Sign in with the accounts in `C:\Users\<you>\secrets\hola-manje-demo-emulator.txt`
+   (random passwords, owner-only file, never printed). It also lists one-time codes for
+   the "Claim your account" flow.
+
+The seed creates two test companies ("Demo Garments (TEST)", "Sample Textiles (TEST)") with
+an admin, a supervisor and workers, this cycle's time records (one person clocked in),
+advances in every state, a previous payroll run with a settlement that has an open
+exception, unclaimed seats, website enquiries, and a demo platform admin (emulator only).
+`node scripts\verify-seed.mjs` checks it all against the real functions and rules.
+
+The same script can fill the live project (`--target live --yes`, test data tagged and
+removable with `--remove`), but without Blaze you could only look at the data there.

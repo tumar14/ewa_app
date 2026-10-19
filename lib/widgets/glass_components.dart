@@ -13,7 +13,19 @@ class GlassBackground extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = context.isDark;
+    // Fill the screen even when the content is short; otherwise the gradient
+    // stops where the content stops and the bare window shows underneath.
+    return LayoutBuilder(builder: (context, constraints) => _paint(
+          context,
+          isDark,
+          fill: constraints.hasBoundedWidth && constraints.hasBoundedHeight,
+        ));
+  }
+
+  Widget _paint(BuildContext context, bool isDark, {required bool fill}) {
     return Container(
+      width: fill ? double.infinity : null,
+      height: fill ? double.infinity : null,
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,

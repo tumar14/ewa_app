@@ -27,17 +27,7 @@ export interface DrawRequestDoc {
   disbursementStatus?: "pending" | "completed" | "failed" | null;
 }
 
-export function defaultAppSettings(companyName: string) {
-  return {
-    companyName,
-    maxDrawPercent: 0.5,
-    feePercent: 0.05,
-    maxDrawsPerCycle: 2,
-    clockSource: "manual",
-    disbursementPolicy: "bankTransfer",
-    paydayRule: { type: "lastDayOfMonth", dayOfMonth: 25, weekday: 5 },
-  };
-}
+export { defaultAppSettings } from "./defaults";
 
 /**
  * Verifies the caller is an admin, scoped to their OWN company. companyId is

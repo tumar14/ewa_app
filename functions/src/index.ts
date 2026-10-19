@@ -2,6 +2,7 @@ import { randomInt } from "crypto";
 import { getAuth } from "firebase-admin/auth";
 import { Timestamp } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { DEFAULT_DEPARTMENTS, DEFAULT_PERMISSIONS, DEFAULT_ROLES } from "./defaults";
 import {
   EmployeeDoc,
   db,
@@ -40,37 +41,6 @@ interface CompanyDoc {
   shortCode: string;
   active?: boolean;
 }
-
-// ── Defaults for a newly-created company's settings subdocs — mirror the
-// Dart model defaults (OrgConfig.defaults(), AppPermissions.defaults(), the
-// AppSettings()/RateMatrix.empty() constructors) so a fresh company behaves
-// exactly like today's single-tenant defaults did. ──────────────────────────
-
-const DEFAULT_DEPARTMENTS = [
-  "Cutting", "Sewing", "Finishing", "Quality Control",
-  "Packing", "Warehouse", "Maintenance", "Security",
-  "Administration", "Management",
-];
-const DEFAULT_ROLES = ["worker", "supervisor"];
-
-const DEFAULT_PERMISSIONS = {
-  worker: {
-    drawRequests: ["view", "create"],
-    approvals: [], workforce: [], payroll: [], disbursements: [],
-    supervisorSignoff: [], auditLog: [], reports: [], settings: [],
-  },
-  supervisor: {
-    drawRequests: ["view", "create"],
-    approvals: ["view", "approve"],
-    workforce: ["view", "edit"],
-    payroll: ["view"],
-    disbursements: ["view"],
-    supervisorSignoff: ["view", "approve"],
-    auditLog: ["view"],
-    reports: ["view"],
-    settings: ["view"],
-  },
-};
 
 // Avoids characters easily confused when read/typed aloud (0/O, 1/I/L) —
 // same approach as the Dart-side RosterEntry.generateCode() claim codes.

@@ -37,18 +37,21 @@ Future<void> _backgroundMessageHandler(RemoteMessage message) async {
 /// Compiled out of normal builds, which never read these defines.
 const _useEmulators = bool.fromEnvironment('USE_EMULATORS');
 const _emulatorHost = String.fromEnvironment('EMULATOR_HOST', defaultValue: '127.0.0.1');
+const _emulatorProject = String.fromEnvironment('EMULATOR_PROJECT');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final options = DefaultFirebaseOptions.currentPlatform;
   await Firebase.initializeApp(
-    // The emulators run under a demo- project id, never the live project.
-    options: _useEmulators
+    // Normally emulator mode keeps the app's own project id (Android ignores
+    // any override and always uses google-services.json), so the emulators are
+    // started under that id. EMULATOR_PROJECT is only for automated web tests.
+    options: _useEmulators && _emulatorProject.isNotEmpty
         ? FirebaseOptions(
             apiKey: options.apiKey,
             appId: options.appId,
             messagingSenderId: options.messagingSenderId,
-            projectId: 'demo-ewa-test',
+            projectId: _emulatorProject,
             storageBucket: options.storageBucket,
             authDomain: options.authDomain,
           )
