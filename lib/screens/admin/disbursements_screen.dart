@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'payment_reference_dialog.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/draw_request.dart';
 import '../../providers/draw_providers.dart';
@@ -52,34 +54,24 @@ class _DisburseCardState extends ConsumerState<_DisburseCard> {
   bool _loading = false;
 
   Future<void> _disburse() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) {
-        final employee = ref.read(employeeByIdProvider(widget.draw.employeeId)).valueOrNull;
-        return AlertDialog(
-          title: const Text('Confirm payment made'),
-          content: Text(
-            'Confirm that you have already paid '
-            'E${widget.draw.amount.toStringAsFixed(2)} to '
-            '${employee?.name ?? widget.draw.employeeId}.\n\n'
-            'Hola Manje records this payment; it does not send the money. '
-            'Pay by bank transfer, mobile money or cash first, then confirm.\n\n'
-            'Payment method: ${employee?.disbursementMethod.name ?? "—"}',
-          ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-            FilledButton(
-                onPressed: () => Navigator.pop(ctx, true), child: const Text('Confirm')),
-          ],
-        );
-      },
+    final employee = ref.read(employeeByIdProvider(widget.draw.employeeId)).valueOrNull;
+    final reference = await askPaymentReference(
+      context,
+      amountText: 'E${widget.draw.amount.toStringAsFixed(2)}',
+      payee: employee?.name ?? widget.draw.employeeId,
+      method: employee?.disbursementMethod.name ?? '—',
     );
-    if (confirmed != true) return;
+    if (reference == null) return;
 
     setState(() => _loading = true);
     try {
-      await ref.read(drawRepositoryProvider).disburse(widget.draw.id);
+      await ref.read(drawRepositoryProvider).disburse(widget.draw.id, reference);
+    } on FirebaseFunctionsException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message ?? 'The payment could not be recorded.')),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

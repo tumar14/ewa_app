@@ -118,3 +118,34 @@ It needs Cloud Functions deployed (Blaze).
 - **Deploying:** these rules need `firebase deploy --only firestore:rules`, and the accrual change needs the
   functions deployed (Blaze). Until the new rules are live, the previous, looser rules still apply.
 - **Checks:** `GCLOUD_PROJECT=ewa-app-cb943 node scripts/verify-attendance.mjs` with the emulators running.
+
+## Internal controls (who can move money)
+
+These close the gaps found in the security review. All are enforced by the server or `firestore.rules`, not just hidden in the app.
+
+| Control | Where | Setting (Admin Settings) |
+|---|---|---|
+| Nobody approves, declines or pays their own advance | `decideDrawRequest`, `disburseDraw` | always on |
+| An advance above an amount needs two different admins; automatic approval never applies above it | `decideDrawRequest`, `requestDraw` | Large advances need two admins |
+| The admin who approved cannot also record the payment | `disburseDraw` | A different admin records the payment |
+| Every payment needs a real bank / mobile-money reference, used once | `disburseDraw` | always on |
+| Payment is held after payout details change; the employee is told | `onEmployeeWritten` trigger, `disburseDraw` | Hold payments for N hours |
+| New employees wait before their first advance; start date is server-stamped | `requestDraw`, rules | New employees wait N days |
+| Advances pause before an employee's last working day | `requestDraw` | Pause N days before leaving (date on the profile) |
+| Settings are validated, capped by the platform ceiling, audited, and undoable | `updateSettings` (clients cannot write `settings/app`) | n/a |
+| Platform ceiling on the advance percentage | `platform_config/limits`, applied again on every request | Platform settings |
+| Every employee edit names the admin and is logged; pay-rate, role and payout changes show in the audit log | rules + `onEmployeeWritten` | n/a |
+| Claim codes lock a seat for 30 minutes after 5 wrong tries, and expire | `claimSeat` | Claim codes expire after N days; HR can issue a new code |
+| Supervisors sign off hours through the server and see no employee records; nobody signs their own hours or records they entered | `getSignOffDay`, `signOffSessions` | Hours are signed off by someone else |
+| At most 6 advance requests per hour per employee | `requestDraw` | n/a |
+
+**Deploy order matters.** Deploy the functions first (`firebase deploy --only functions`, needs Blaze), then
+the new app builds, and the rules last (`firebase deploy --only firestore:rules`). The new rules refuse the
+old app's settings save, employee edits and sign-off, because those now carry server stamps or go through functions.
+
+**App Check** (proves a request comes from the real app) is wired but off. To switch it on: register the apps
+under Firebase console > App Check (Play Integrity for Android, reCAPTCHA v3 for the web), build with
+`--dart-define=APP_CHECK=true` (and `APP_CHECK_SITE_KEY=...` for the web), check in the console that requests are
+verified, then deploy the functions with `ENFORCE_APP_CHECK=true`. Do not enforce before the apps send tokens.
+
+Checks: `GCLOUD_PROJECT=ewa-app-cb943 node scripts/verify-controls.mjs` with the emulators running.

@@ -3,8 +3,10 @@ import { getAuth } from "firebase-admin/auth";
 import { Timestamp } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { DEFAULT_DEPARTMENTS, DEFAULT_PERMISSIONS, DEFAULT_ROLES } from "./defaults";
+import { afterFailure, isExpired, isLocked, validDaysFrom } from "./claimGuard";
 import {
   EmployeeDoc,
+  callableOptions,
   db,
   defaultAppSettings,
   notifyEmployee,
@@ -16,6 +18,9 @@ export { requestDraw, decideDrawRequest, disburseDraw } from "./draws";
 export { runPayroll } from "./payroll";
 export { submitEnquiry } from "./enquiries";
 export { platformOverview } from "./overview";
+export { updateSettings } from "./settingsApi";
+export { getSignOffDay, signOffSessions } from "./signoff";
+export { onEmployeeWritten } from "./employeeTriggers";
 export {
   createSettlement,
   confirmDeductions,
@@ -61,7 +66,7 @@ function generateShortCode(): string {
  * the companyId custom claim so the new employee's client can resolve which
  * company subcollection to read on first sign-in.
  */
-export const createEmployee = onCall(async (request) => {
+export const createEmployee = onCall(callableOptions, async (request) => {
   const companyId = await requireCompanyAdmin(request);
 
   const {
@@ -98,6 +103,7 @@ export const createEmployee = onCall(async (request) => {
       disbursementMethod: disbursementMethod ?? "bankTransfer",
       disbursementDetails: disbursementDetails ?? {},
       active: true,
+      createdAt: Timestamp.now(),
     });
 
     await db.collection("companies").doc(companyId).collection("audit_log").add({
@@ -135,7 +141,7 @@ export const createEmployee = onCall(async (request) => {
  * seat. Errors are deliberately generic so an attacker cannot enumerate
  * valid employee numbers, valid companies, or tell which field was wrong.
  */
-export const claimSeat = onCall(async (request) => {
+export const claimSeat = onCall(callableOptions, async (request) => {
   const { companyId, employeeNumber, fullName, claimCode, email, password } = request.data as {
     companyId?: string;
     employeeNumber?: string;
@@ -183,8 +189,26 @@ export const claimSeat = onCall(async (request) => {
   if (!rosterSnap.exists) throw mismatch;
   const roster = rosterSnap.data() as RosterDoc;
   if (roster.claimed) throw mismatch;
-  if (normName(roster.name) !== normName(fullName)) throw mismatch;
-  if (normCode(roster.claimCode) !== normCode(claimCode)) throw mismatch;
+
+  // A locked seat or an expired code is refused with the same message as a wrong guess.
+  const nowMs = Date.now();
+  const settingsData = (await companyRef.collection("settings").doc("app").get()).data() ?? {};
+  const lockedUntilMs = (rosterSnap.data()?.claimLockedUntil as Timestamp | null | undefined)?.toMillis() ?? null;
+  const issuedAtMs = (rosterSnap.data()?.claimCodeIssuedAt as Timestamp | null | undefined)?.toMillis() ?? null;
+  if (isLocked(lockedUntilMs, nowMs) || isExpired(issuedAtMs, nowMs, validDaysFrom(settingsData))) throw mismatch;
+
+  if (normName(roster.name) !== normName(fullName) || normCode(roster.claimCode) !== normCode(claimCode)) {
+    // Count the wrong guess against this seat; the fifth locks it for 30 minutes.
+    await db.runTransaction(async (tx) => {
+      const fresh = (await tx.get(rosterRef)).data() ?? {};
+      const next = afterFailure(Number(fresh.claimFailures ?? 0), Date.now());
+      tx.update(rosterRef, {
+        claimFailures: next.failures,
+        claimLockedUntil: next.lockedUntilMs === null ? null : Timestamp.fromMillis(next.lockedUntilMs),
+      });
+    });
+    throw mismatch;
+  }
 
   // Create the Auth user first so we fail fast on a duplicate email.
   let uid: string;
@@ -230,9 +254,12 @@ export const claimSeat = onCall(async (request) => {
         active: true,
         mustChangePassword: false,
         consentedAt: null,
+        createdAt: Timestamp.now(),
       });
 
       tx.update(rosterRef, {
+        claimFailures: 0,
+        claimLockedUntil: null,
         claimed: true,
         claimedByUid: uid,
         claimedAt: Timestamp.now(),

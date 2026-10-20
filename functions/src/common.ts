@@ -6,6 +6,13 @@ import { HttpsError, CallableRequest } from "firebase-functions/v2/https";
 initializeApp();
 export const db = getFirestore();
 
+/**
+ * Options for the functions that touch money, settings or time records. Set
+ * ENFORCE_APP_CHECK=true once the apps send App Check tokens (see README), so only
+ * the real apps, not scripts, can call them.
+ */
+export const callableOptions = { enforceAppCheck: process.env.ENFORCE_APP_CHECK === "true" };
+
 export interface EmployeeDoc {
   role?: string;
   hourlyRate: number;
@@ -13,6 +20,9 @@ export interface EmployeeDoc {
   disbursementDetails?: Record<string, string>;
   fcmToken?: string;
   active?: boolean;
+  createdAt?: Timestamp;
+  lastWorkingDay?: Timestamp;
+  payoutChangedAt?: Timestamp;
 }
 
 // Money fields ending in "Minor" are integer minor units (cents of a lilangeni).
@@ -25,6 +35,8 @@ export interface DrawRequestDoc {
   createdAt?: Timestamp;
   payrollRunId?: string | null;
   disbursementStatus?: "pending" | "completed" | "failed" | null;
+  decidedBy?: string | null;
+  firstApprovalBy?: string | null;
 }
 
 export { defaultAppSettings } from "./defaults";
@@ -58,6 +70,26 @@ export async function requireCompanyAdmin(request: CallableRequest): Promise<str
     throw new HttpsError("permission-denied", "Admin role required.");
   }
   return companyId;
+}
+
+/**
+ * The caller's company, id and role, for functions open to more than admins.
+ * Role is read live from their employee record and they must be active.
+ */
+export async function requireRole(
+  request: CallableRequest,
+  roles: string[],
+): Promise<{ uid: string; companyId: string; role: string }> {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in required.");
+  const companyId = request.auth?.token?.companyId as string | undefined;
+  if (!companyId) throw new HttpsError("permission-denied", "No company associated with this account.");
+  const employee = await db.collection("companies").doc(companyId).collection("employees").doc(uid).get();
+  const role = employee.data()?.role as string | undefined;
+  if (!employee.exists || employee.data()?.active === false || !role || !roles.includes(role)) {
+    throw new HttpsError("permission-denied", "You do not have permission to do this.");
+  }
+  return { uid, companyId, role };
 }
 
 export async function requirePlatformAdmin(request: CallableRequest): Promise<void> {

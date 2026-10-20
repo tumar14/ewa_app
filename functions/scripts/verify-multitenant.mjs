@@ -128,7 +128,7 @@ async function main() {
     employeeNumber: "EMP-001",
     fullName: "Alice Alpha",
     claimCode: "SAME123",
-    email: "alice@example.com",
+    email: `alice.${Date.now()}@example.com`,
     password: "secret123",
   });
   check("Alice claims her own Company A seat", aliceClaim.status === 200, JSON.stringify(aliceClaim.body));
@@ -138,7 +138,7 @@ async function main() {
     employeeNumber: "EMP-001",
     fullName: "Bob Beta",
     claimCode: "SAME123",
-    email: "bob@example.com",
+    email: `bob.${Date.now()}@example.com`,
     password: "secret123",
   });
   check("Bob claims his own Company B seat (same number+code as Alice)", bobClaim.status === 200, JSON.stringify(bobClaim.body));

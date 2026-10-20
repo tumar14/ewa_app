@@ -12,6 +12,7 @@ class PlatformSettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final saved = ref.watch(websiteIndustriesProvider);
+    final ceiling = ref.watch(drawCeilingProvider).valueOrNull ?? 0.5;
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: GlassAppBar(title: const Text('Platform settings')),
@@ -22,6 +23,12 @@ class PlatformSettingsScreen extends ConsumerWidget {
           data: (industries) => ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              DrawCeilingEditor(
+                key: ValueKey(ceiling),
+                saved: ceiling,
+                onSave: (c) => ref.read(platformConfigRepositoryProvider).saveDrawCeiling(c),
+              ),
+              const SizedBox(height: 16),
               IndustriesEditor(
                 saved: industries,
                 onSave: (list) => ref.read(platformConfigRepositoryProvider).saveIndustries(list),
@@ -180,3 +187,73 @@ class _IndustriesEditorState extends State<IndustriesEditor> {
     );
   }
 }
+
+/// The platform-wide ceiling on advances. A company can set its own limit lower in Admin
+/// Settings but never higher, and the server applies this ceiling to every request too.
+class DrawCeilingEditor extends StatefulWidget {
+  final double saved;
+  final Future<void> Function(double ceiling) onSave;
+  const DrawCeilingEditor({super.key, required this.saved, required this.onSave});
+
+  @override
+  State<DrawCeilingEditor> createState() => _DrawCeilingEditorState();
+}
+
+class _DrawCeilingEditorState extends State<DrawCeilingEditor> {
+  late double _value = widget.saved;
+  bool _saving = false;
+
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await widget.onSave(_value);
+      messenger.showSnackBar(const SnackBar(content: Text('Ceiling saved. Companies cannot set a higher limit.')));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Could not save: $e')));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final pct = (_value * 100).round();
+    return GlassCard(
+      radius: 16,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Most any company may advance', style: theme.textTheme.titleMedium),
+          const SizedBox(height: 4),
+          Text(
+            'The highest share of earned wages a company can let employees draw. Their own limit in Admin Settings '
+            'can be lower but never higher. Check it against the current Wages Order before raising it.',
+            style: theme.textTheme.bodySmall,
+          ),
+          Slider(
+            value: _value,
+            min: 0.05,
+            max: 1,
+            divisions: 19,
+            label: '$pct%',
+            onChanged: (v) => setState(() => _value = double.parse(v.toStringAsFixed(2))),
+          ),
+          Row(
+            children: [
+              Text('$pct% of earned wages', style: theme.textTheme.bodyMedium),
+              const Spacer(),
+              FilledButton(
+                onPressed: _saving || (_value - widget.saved).abs() < 0.001 ? null : _save,
+                child: Text(_saving ? 'Saving…' : 'Save ceiling'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+

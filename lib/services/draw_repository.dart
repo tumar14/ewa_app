@@ -59,7 +59,9 @@ class DrawRepository {
     return data is Map ? (data['status'] as String? ?? 'pending') : 'pending';
   }
 
-  Future<void> decide({
+  /// Approves or declines a request. Returns true when this was only the FIRST of two
+  /// approvals (a large advance), so the request stays pending for a different admin.
+  Future<bool> decide({
     required String requestId,
     required bool approve,
     String? reason,
@@ -71,11 +73,18 @@ class DrawRepository {
     if (!approve && reason != null && reason.isNotEmpty) {
       payload['reason'] = reason;
     }
-    await _functions.httpsCallable('decideDrawRequest').call(payload);
+    final result = await _functions.httpsCallable('decideDrawRequest').call(payload);
+    final data = result.data;
+    return data is Map && data['awaitingSecondApproval'] == true;
   }
 
-  Future<void> disburse(String requestId) async {
-    await _functions.httpsCallable('disburseDraw').call({'requestId': requestId});
+  /// Records that the advance was paid. [paymentReference] is the reference from the bank
+  /// or mobile-money payment; the server refuses a payment with none, one already used,
+  /// or one recorded by the person who approved the advance.
+  Future<void> disburse(String requestId, String paymentReference) async {
+    await _functions
+        .httpsCallable('disburseDraw')
+        .call({'requestId': requestId, 'paymentReference': paymentReference});
   }
 
   Stream<List<DrawRequest>> watchHistory() {

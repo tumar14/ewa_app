@@ -57,6 +57,11 @@ class PaydayRule {
 
 // ── App settings ──────────────────────────────────────────────────────────────
 
+int _count(Object? raw, int min, int max, int fallback) {
+  final n = raw is num ? raw.toInt() : fallback;
+  return n >= min && n <= max ? n : fallback;
+}
+
 int _shiftHours(Object? raw) {
   final n = raw is num ? raw.toInt() : 14;
   return n >= 1 && n <= 24 ? n : 14;
@@ -82,6 +87,28 @@ class AppSettings {
 
   /// When on, only time a supervisor has signed off counts towards advances.
   final bool countOnlyReviewedHours;
+
+  /// Controls so one person acting alone, or a made-up employee, cannot move money.
+  /// An advance above [dualApprovalAboveMinor] (cents; null = never) needs two different admins.
+  final int? dualApprovalAboveMinor;
+
+  /// The person who records a payment must not be one of those who approved it.
+  final bool separatePayer;
+
+  /// A new employee cannot ask for an advance for this many days.
+  final int newEmployeeWaitDays;
+
+  /// Advances pause this many days before an employee's last working day.
+  final int pauseDrawsDaysBeforeExit;
+
+  /// Payment to an employee is held this many hours after their payout details change.
+  final int payoutCoolingHours;
+
+  /// Whoever entered or uploaded a time record cannot also sign it off.
+  final bool separateSignOff;
+
+  /// Claim codes stop working after this many days (0 = they never expire).
+  final int claimCodeValidDays;
   final DisbursementMethod disbursementPolicy;
   final PaydayRule paydayRule;
 
@@ -102,6 +129,13 @@ class AppSettings {
     this.allowAttendanceImport = true,
     this.maxShiftHours = 14,
     this.countOnlyReviewedHours = false,
+    this.dualApprovalAboveMinor,
+    this.separatePayer = true,
+    this.newEmployeeWaitDays = 0,
+    this.pauseDrawsDaysBeforeExit = 7,
+    this.payoutCoolingHours = 48,
+    this.separateSignOff = true,
+    this.claimCodeValidDays = 30,
     this.disbursementPolicy = DisbursementMethod.bankTransfer,
     this.paydayRule = const PaydayRule(),
     this.autoApprove = false,
@@ -122,6 +156,13 @@ class AppSettings {
       allowAttendanceImport: map['allowAttendanceImport'] != false,
       maxShiftHours: _shiftHours(map['maxShiftHours']),
       countOnlyReviewedHours: map['countOnlyReviewedHours'] == true,
+      dualApprovalAboveMinor: (map['dualApprovalAboveMinor'] as num?)?.toInt(),
+      separatePayer: map['separatePayer'] != false,
+      newEmployeeWaitDays: _count(map['newEmployeeWaitDays'], 0, 90, 0),
+      pauseDrawsDaysBeforeExit: _count(map['pauseDrawsDaysBeforeExit'], 0, 90, 7),
+      payoutCoolingHours: _count(map['payoutCoolingHours'], 0, 720, 48),
+      separateSignOff: map['separateSignOff'] != false,
+      claimCodeValidDays: _count(map['claimCodeValidDays'], 0, 365, 30),
       disbursementPolicy: DisbursementMethod.values.firstWhere(
         (e) => e.name == map['disbursementPolicy'],
         orElse: () => DisbursementMethod.bankTransfer,
@@ -143,6 +184,13 @@ class AppSettings {
         'allowAttendanceImport': allowAttendanceImport,
         'maxShiftHours': maxShiftHours,
         'countOnlyReviewedHours': countOnlyReviewedHours,
+        'dualApprovalAboveMinor': dualApprovalAboveMinor,
+        'separatePayer': separatePayer,
+        'newEmployeeWaitDays': newEmployeeWaitDays,
+        'pauseDrawsDaysBeforeExit': pauseDrawsDaysBeforeExit,
+        'payoutCoolingHours': payoutCoolingHours,
+        'separateSignOff': separateSignOff,
+        'claimCodeValidDays': claimCodeValidDays,
         'disbursementPolicy': disbursementPolicy.name,
         'paydayRule': paydayRule.toMap(),
         'autoApprove': autoApprove,
@@ -159,6 +207,14 @@ class AppSettings {
     bool? allowAttendanceImport,
     int? maxShiftHours,
     bool? countOnlyReviewedHours,
+    int? dualApprovalAboveMinor,
+    bool clearDualApproval = false,
+    bool? separatePayer,
+    int? newEmployeeWaitDays,
+    int? pauseDrawsDaysBeforeExit,
+    int? payoutCoolingHours,
+    bool? separateSignOff,
+    int? claimCodeValidDays,
     DisbursementMethod? disbursementPolicy,
     PaydayRule? paydayRule,
     bool? autoApprove,
@@ -175,6 +231,13 @@ class AppSettings {
       allowAttendanceImport: allowAttendanceImport ?? this.allowAttendanceImport,
       maxShiftHours: maxShiftHours ?? this.maxShiftHours,
       countOnlyReviewedHours: countOnlyReviewedHours ?? this.countOnlyReviewedHours,
+      dualApprovalAboveMinor: clearDualApproval ? null : (dualApprovalAboveMinor ?? this.dualApprovalAboveMinor),
+      separatePayer: separatePayer ?? this.separatePayer,
+      newEmployeeWaitDays: newEmployeeWaitDays ?? this.newEmployeeWaitDays,
+      pauseDrawsDaysBeforeExit: pauseDrawsDaysBeforeExit ?? this.pauseDrawsDaysBeforeExit,
+      payoutCoolingHours: payoutCoolingHours ?? this.payoutCoolingHours,
+      separateSignOff: separateSignOff ?? this.separateSignOff,
+      claimCodeValidDays: claimCodeValidDays ?? this.claimCodeValidDays,
       disbursementPolicy: disbursementPolicy ?? this.disbursementPolicy,
       paydayRule: paydayRule ?? this.paydayRule,
       autoApprove: autoApprove ?? this.autoApprove,

@@ -83,6 +83,10 @@ class EmployeeRepository {
     }
 
     await _collection.doc(uid).set({
+      // The server's time and the admin's id: firestore.rules require them, and they let the
+      // audit log name who added this person and stop a start date being backdated.
+      'createdAt': FieldValue.serverTimestamp(),
+      ..._editStamp(),
       'name': name,
       'email': email,
       'department': department,
@@ -104,8 +108,14 @@ class EmployeeRepository {
 
   /// Marks the employee inactive in Firestore.
   Future<void> deactivate(String employeeId) {
-    return _collection.doc(employeeId).update({'active': false});
+    return _collection.doc(employeeId).update({'active': false, ..._editStamp()});
   }
+
+  /// Who made this edit and when. firestore.rules insist on it for every admin change.
+  Map<String, dynamic> _editStamp() => {
+        'lastEditedBy': FirebaseAuth.instance.currentUser!.uid,
+        'lastEditedAt': FieldValue.serverTimestamp(),
+      };
 
   /// Updates mutable profile fields.
   ///
@@ -126,7 +136,7 @@ class EmployeeRepository {
       }
     }
 
-    return _collection.doc(employee.id).update(data);
+    return _collection.doc(employee.id).update({...data, ..._editStamp()});
   }
 
   Future<void> updateFcmToken(String employeeId, String token) {

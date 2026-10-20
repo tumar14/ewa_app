@@ -8,6 +8,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -23,6 +24,7 @@ import 'screens/auth/force_change_password_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/worker/worker_home_screen.dart';
 import 'screens/admin/admin_shell.dart';
+import 'screens/supervisor/supervisor_shell.dart';
 import 'screens/platform_admin/platform_admin_shell.dart';
 
 @pragma('vm:entry-point')
@@ -37,6 +39,13 @@ Future<void> _backgroundMessageHandler(RemoteMessage message) async {
 const _useEmulators = bool.fromEnvironment('USE_EMULATORS');
 const _emulatorHost = String.fromEnvironment('EMULATOR_HOST', defaultValue: '127.0.0.1');
 const _emulatorProject = String.fromEnvironment('EMULATOR_PROJECT');
+
+/// App Check proves a request comes from the real app, not a script. Off unless the build
+/// is made with `--dart-define=APP_CHECK=true` (and, on the web, `APP_CHECK_SITE_KEY`) after
+/// the console setup described in the README; the server only enforces it when
+/// ENFORCE_APP_CHECK=true. Never on with the emulators.
+const _appCheck = bool.fromEnvironment('APP_CHECK');
+const _appCheckSiteKey = String.fromEnvironment('APP_CHECK_SITE_KEY');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -56,6 +65,14 @@ Future<void> main() async {
           )
         : options,
   );
+
+  if (_appCheck && !_useEmulators) {
+    await FirebaseAppCheck.instance.activate(
+      androidProvider: kDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity,
+      appleProvider: kDebugMode ? AppleProvider.debug : AppleProvider.appAttestWithDeviceCheckFallback,
+      webProvider: _appCheckSiteKey.isEmpty ? null : ReCaptchaV3Provider(_appCheckSiteKey),
+    );
+  }
 
   if (_useEmulators) {
     await FirebaseAuth.instance.useAuthEmulator(_emulatorHost, 9099);
@@ -174,9 +191,11 @@ class AuthGate extends ConsumerWidget {
 
                 return _FcmSetup(
                   employeeId: employee.id,
-                  child: employee.role == 'admin'
-                      ? const AdminShell()
-                      : WorkerHomeScreen(employeeId: employee.id),
+                  child: switch (employee.role) {
+                    'admin' => const AdminShell(),
+                    'supervisor' => const SupervisorShell(),
+                    _ => WorkerHomeScreen(employeeId: employee.id),
+                  },
                 );
               },
             );

@@ -22,6 +22,12 @@ class Employee {
   final bool mustChangePassword;
   final DateTime? consentedAt;
 
+  /// Set when the person is leaving. Advances pause shortly before it (see Admin Settings).
+  final DateTime? lastWorkingDay;
+
+  /// Set by the server when payout details change; payments are held for a while after.
+  final DateTime? payoutChangedAt;
+
   Employee({
     required this.id,
     required this.name,
@@ -39,6 +45,8 @@ class Employee {
     this.active = true,
     this.mustChangePassword = false,
     this.consentedAt,
+    this.lastWorkingDay,
+    this.payoutChangedAt,
   });
 
   factory Employee.fromMap(String id, Map<String, dynamic> map) {
@@ -64,6 +72,8 @@ class Employee {
       active: map['active'] as bool? ?? true,
       mustChangePassword: map['mustChangePassword'] as bool? ?? false,
       consentedAt: (map['consentedAt'] as Timestamp?)?.toDate(),
+      lastWorkingDay: (map['lastWorkingDay'] as Timestamp?)?.toDate(),
+      payoutChangedAt: (map['payoutChangedAt'] as Timestamp?)?.toDate(),
     );
   }
 
@@ -82,5 +92,6 @@ class Employee {
         'disbursementMethod': disbursementMethod.name,
         'disbursementDetails': disbursementDetails,
         'active': active,
+        'lastWorkingDay': lastWorkingDay == null ? null : Timestamp.fromDate(lastWorkingDay!),
       };
 }

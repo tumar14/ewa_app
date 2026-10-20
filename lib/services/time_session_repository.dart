@@ -166,30 +166,6 @@ class TimeSessionRepository {
             snap.docs.map((d) => TimeSession.fromMap(d.id, d.data())).toList());
   }
 
-  /// Supervisor daily sign-off: stamps a punch as reviewed. Bulk sign-off
-  /// (a whole day) calls this once per session via a batch from the caller.
-  Future<void> markReviewed(String sessionId, String reviewerId) {
-    return _collection.doc(sessionId).update({
-      'reviewedBy': reviewerId,
-      'reviewedAt': Timestamp.now(),
-    });
-  }
-
-  /// Signs off every not-yet-reviewed session in [sessions] in one batch —
-  /// used by the "sign off day" bulk action.
-  Future<void> markReviewedBatch(List<TimeSession> sessions, String reviewerId) {
-    final batch = _collection.firestore.batch();
-    final now = Timestamp.now();
-    for (final s in sessions) {
-      if (s.isReviewed) continue;
-      batch.update(_collection.doc(s.id), {
-        'reviewedBy': reviewerId,
-        'reviewedAt': now,
-      });
-    }
-    return batch.commit();
-  }
-
   // ── Manual changes by an admin ─────────────────────────────────────────────
   // Each one writes the record and an append-only entry in time_edits in one
   // batch: who, when (server time), why, and the times before and after.
@@ -222,8 +198,9 @@ class TimeSessionRepository {
       'source': ClockEventSource.adminEdit.name,
       'flagged': false,
       'photoUrl': null,
-      'reviewedBy': editorId,
-      'reviewedAt': FieldValue.serverTimestamp(),
+      // Not signed off: someone else does that, whoever typed it in cannot.
+      'reviewedBy': null,
+      'reviewedAt': null,
       'editedBy': editorId,
       'editedAt': FieldValue.serverTimestamp(),
       'editReason': reason.trim(),
@@ -255,8 +232,9 @@ class TimeSessionRepository {
       'clockInTs': Timestamp.fromDate(clockIn),
       'clockOutTs': Timestamp.fromDate(clockOut),
       'source': ClockEventSource.adminEdit.name,
-      'reviewedBy': editorId,
-      'reviewedAt': FieldValue.serverTimestamp(),
+      // A corrected record needs signing off again, by someone else.
+      'reviewedBy': null,
+      'reviewedAt': null,
       'editedBy': editorId,
       'editedAt': FieldValue.serverTimestamp(),
       'editReason': reason.trim(),

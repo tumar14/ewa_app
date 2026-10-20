@@ -8,6 +8,7 @@ import '../../models/settings.dart';
 import '../../providers/settings_providers.dart';
 import '../../providers/firebase_providers.dart';
 import '../../providers/theme_providers.dart';
+import '../../services/settings_repository.dart' show SettingsException;
 import '../../theme/glass_theme.dart';
 import '../../utils/currency_formatter.dart';
 import '../../utils/pay_cycle.dart';
@@ -61,6 +62,14 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
   late bool _allowAttendanceImport;
   late int _maxShiftHours;
   late bool _countOnlyReviewedHours;
+  late bool _hasDualApproval;
+  late final TextEditingController _dualCtrl;
+  late bool _separatePayer;
+  late int _newEmployeeWaitDays;
+  late int _pauseDaysBeforeExit;
+  late int _payoutCoolingHours;
+  late bool _separateSignOff;
+  late int _claimCodeValidDays;
   late DisbursementMethod _disbursementPolicy;
   late PaydayRule _paydayRule;
   // Bumped when the whole form is replaced (reset / restore) so the fee editor starts over.
@@ -73,6 +82,7 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
     super.initState();
     _companyNameCtrl = TextEditingController(text: widget.settings.companyName);
     _ceilingCtrl = TextEditingController();
+    _dualCtrl = TextEditingController();
     _load(widget.settings);
   }
 
@@ -92,6 +102,16 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
     _allowAttendanceImport = s.allowAttendanceImport;
     _maxShiftHours = s.maxShiftHours;
     _countOnlyReviewedHours = s.countOnlyReviewedHours;
+    _hasDualApproval = s.dualApprovalAboveMinor != null;
+    _dualCtrl.text = s.dualApprovalAboveMinor == null
+        ? ''
+        : (s.dualApprovalAboveMinor! / 100).toStringAsFixed(s.dualApprovalAboveMinor! % 100 == 0 ? 0 : 2);
+    _separatePayer = s.separatePayer;
+    _newEmployeeWaitDays = s.newEmployeeWaitDays;
+    _pauseDaysBeforeExit = s.pauseDrawsDaysBeforeExit;
+    _payoutCoolingHours = s.payoutCoolingHours;
+    _separateSignOff = s.separateSignOff;
+    _claimCodeValidDays = s.claimCodeValidDays;
     _disbursementPolicy = s.disbursementPolicy;
     _paydayRule = s.paydayRule;
   }
@@ -162,6 +182,7 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
   void dispose() {
     _companyNameCtrl.dispose();
     _ceilingCtrl.dispose();
+    _dualCtrl.dispose();
     super.dispose();
   }
 
@@ -178,7 +199,15 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
         return refuse('Enter the automatic approval ceiling as an amount, like 200 or 200.00.');
       }
     }
-    await ref.read(settingsRepositoryProvider).update(AppSettings(
+    int? dual;
+    if (_hasDualApproval) {
+      dual = CurrencyFormatter.parseMinor(_dualCtrl.text);
+      if (dual == null || dual <= 0) {
+        return refuse('Enter the amount above which two admins must approve, like 500 or 500.00.');
+      }
+    }
+    try {
+      await ref.read(settingsRepositoryProvider).update(AppSettings(
           companyName: _companyNameCtrl.text.trim(),
           maxDrawPercent: _maxDrawPercent,
           feeSchedule: _feeSchedule,
@@ -188,14 +217,24 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
           allowAttendanceImport: _allowAttendanceImport,
           maxShiftHours: _maxShiftHours,
           countOnlyReviewedHours: _countOnlyReviewedHours,
+          dualApprovalAboveMinor: _hasDualApproval ? dual : null,
+          separatePayer: _separatePayer,
+          newEmployeeWaitDays: _newEmployeeWaitDays,
+          pauseDrawsDaysBeforeExit: _pauseDaysBeforeExit,
+          payoutCoolingHours: _payoutCoolingHours,
+          separateSignOff: _separateSignOff,
+          claimCodeValidDays: _claimCodeValidDays,
           disbursementPolicy: _disbursementPolicy,
           paydayRule: _paydayRule,
           autoApprove: _autoApprove,
           autoApproveMaxMinor: _autoApprove && _hasCeiling ? ceiling : null,
         ));
-    if (mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Settings saved.')));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Settings saved.')));
+      }
+    } on SettingsException catch (e) {
+      refuse(e.message);
     }
   }
 
@@ -479,6 +518,102 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
                     ),
                   ),
               ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // ── Approvals & payments ────────────────────────────────────────────
+        _SectionLabel('Approvals & payments'),
+        GlassCard(
+          radius: 16,
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Large advances need two admins'),
+                subtitle: const Text('Above the amount you set, a second, different admin must also approve. Automatic approval never applies above it.'),
+                value: _hasDualApproval,
+                onChanged: (v) => setState(() => _hasDualApproval = v),
+              ),
+              if (_hasDualApproval)
+                TextField(
+                  controller: _dualCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: 'Two admins above (E)', helperText: 'The advance amount, before the fee.'),
+                ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('A different admin records the payment'),
+                subtitle: const Text('Whoever approves an advance cannot also mark it paid. Recommended.'),
+                value: _separatePayer,
+                onChanged: (v) => setState(() => _separatePayer = v),
+              ),
+              const SizedBox(height: 8),
+              Text('Hold payments for $_payoutCoolingHours hours after payout details change', style: Theme.of(context).textTheme.bodyMedium),
+              Slider(
+                value: _payoutCoolingHours.toDouble(),
+                min: 0,
+                max: 168,
+                divisions: 14,
+                label: '$_payoutCoolingHours h',
+                onChanged: (v) => setState(() => _payoutCoolingHours = v.round()),
+              ),
+              Text('The employee is told, and payment waits, so a swapped account number is noticed before money moves.', style: Theme.of(context).textTheme.bodySmall),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // ── Protection against fraud ────────────────────────────────────────
+        _SectionLabel('Protection against fraud'),
+        GlassCard(
+          radius: 16,
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('New employees wait $_newEmployeeWaitDays days before their first advance', style: Theme.of(context).textTheme.bodyMedium),
+              Slider(
+                value: _newEmployeeWaitDays.toDouble(),
+                min: 0,
+                max: 30,
+                divisions: 30,
+                label: '$_newEmployeeWaitDays days',
+                onChanged: (v) => setState(() => _newEmployeeWaitDays = v.round()),
+              ),
+              Text('Makes it harder to add a made-up employee and draw straight away. 0 means no wait.', style: Theme.of(context).textTheme.bodySmall),
+              const SizedBox(height: 12),
+              Text('Pause advances $_pauseDaysBeforeExit days before someone\'s last working day', style: Theme.of(context).textTheme.bodyMedium),
+              Slider(
+                value: _pauseDaysBeforeExit.toDouble(),
+                min: 0,
+                max: 30,
+                divisions: 30,
+                label: '$_pauseDaysBeforeExit days',
+                onChanged: (v) => setState(() => _pauseDaysBeforeExit = v.round()),
+              ),
+              Text('Set the last working day on the employee\'s profile. Stops advances that final pay could not cover.', style: Theme.of(context).textTheme.bodySmall),
+              const SizedBox(height: 12),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Hours are signed off by someone else'),
+                subtitle: const Text('Whoever types in or uploads hours cannot also sign them off.'),
+                value: _separateSignOff,
+                onChanged: (v) => setState(() => _separateSignOff = v),
+              ),
+              Text(_claimCodeValidDays == 0 ? 'Claim codes never expire' : 'Claim codes expire after $_claimCodeValidDays days', style: Theme.of(context).textTheme.bodyMedium),
+              Slider(
+                value: _claimCodeValidDays.toDouble(),
+                min: 0,
+                max: 90,
+                divisions: 90,
+                label: _claimCodeValidDays == 0 ? 'never' : '$_claimCodeValidDays days',
+                onChanged: (v) => setState(() => _claimCodeValidDays = v.round()),
+              ),
+              Text('A seat is also locked for 30 minutes after 5 wrong tries. HR can issue a new code from the roster.', style: Theme.of(context).textTheme.bodySmall),
             ],
           ),
         ),

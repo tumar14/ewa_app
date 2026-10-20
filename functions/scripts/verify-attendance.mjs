@@ -118,15 +118,17 @@ async function main() {
   check("a worker cannot delete a record", denied(await remove(aWorker.token, sess("w1"))));
 
   console.log("\n-- an admin --");
-  const adminAdd = (id, over = {}) => write(sess(id), { employeeId: aWorker.uid, clockInTs: new Date(NOW - 30 * H), clockOutTs: new Date(NOW - 22 * H), source: "adminEdit", flagged: false, photoUrl: null, reviewedBy: aAdmin.uid, reviewedAt: SERVER, editedBy: aAdmin.uid, editedAt: SERVER, editReason: "Forgot to clock in", ...over });
+  const adminAdd = (id, over = {}) => write(sess(id), { employeeId: aWorker.uid, clockInTs: new Date(NOW - 30 * H), clockOutTs: new Date(NOW - 22 * H), source: "adminEdit", flagged: false, photoUrl: null, reviewedBy: null, reviewedAt: null, editedBy: aAdmin.uid, editedAt: SERVER, editReason: "Forgot to clock in", ...over });
   check("an admin can add missing hours", ok(await commit(aAdmin.token, [adminAdd("a1")])));
   check("but only in their own name (editedBy must be them)", denied(await commit(aAdmin.token, [adminAdd("a2", { editedBy: aOther.uid })])));
   check("an admin can run a kiosk punch", ok(await commit(aAdmin.token, [write(sess("k1"), { employeeId: aWorker.uid, clockInTs: new Date(NOW - 3 * H), clockOutTs: null, source: "kioskPin", flagged: false, photoUrl: null, reviewedBy: null, reviewedAt: null })])));
   check("and clock that person out", ok(await commit(aAdmin.token, [write(sess("k1"), { clockOutTs: new Date(NOW - 1 * H) }, { update: true })])));
-  check("an admin can correct times only as a marked, logged edit", ok(await commit(aAdmin.token, [write(sess("a1"), { clockOutTs: new Date(NOW - 21 * H), source: "adminEdit", editedBy: aAdmin.uid, editedAt: SERVER, editReason: "Left an hour earlier" }, { update: true })])));
+  check("an admin can correct times only as a marked, logged edit", ok(await commit(aAdmin.token, [write(sess("a1"), { clockOutTs: new Date(NOW - 21 * H), source: "adminEdit", editedBy: aAdmin.uid, editedAt: SERVER, editReason: "Left an hour earlier", reviewedBy: null, reviewedAt: null }, { update: true })])));
   check("changing times without marking it as an edit is refused", denied(await commit(aAdmin.token, [write(sess("k1"), { clockInTs: new Date(NOW - 8 * H) }, { update: true })])));
-  check("an admin can void a record", ok(await commit(aAdmin.token, [write(sess("a1"), { voided: true, source: "adminEdit", editedBy: aAdmin.uid, editedAt: SERVER, editReason: "Entered for the wrong person" }, { update: true })])));
-  check("an admin can sign off and flag", ok(await commit(aAdmin.token, [write(sess("k1"), { reviewedBy: aAdmin.uid, reviewedAt: SERVER, flagged: true }, { update: true })])));
+  check("an admin can void a record", ok(await commit(aAdmin.token, [write(sess("a1"), { voided: true, source: "adminEdit", editedBy: aAdmin.uid, editedAt: SERVER, editReason: "Entered for the wrong person", reviewedBy: null, reviewedAt: null }, { update: true })])));
+  check("an admin can flag a record", ok(await commit(aAdmin.token, [write(sess("k1"), { flagged: true }, { update: true })])));
+  check("but signing off is only through the server, so an admin cannot write it directly", denied(await commit(aAdmin.token, [write(sess("k1"), { reviewedBy: aAdmin.uid, reviewedAt: SERVER }, { update: true })])));
+  check("and a record entered by an admin cannot arrive already signed off", denied(await commit(aAdmin.token, [adminAdd("a3", { reviewedBy: aAdmin.uid, reviewedAt: SERVER })])));
   check("nobody can delete a record, not even an admin", denied(await remove(aAdmin.token, sess("a1"))));
   const other = await user("some-other-company");
   check("an admin of another company can do none of this", denied(await commit(other.token, [adminAdd("x1")])));

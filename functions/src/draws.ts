@@ -3,6 +3,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import {
   DrawRequestDoc,
   EmployeeDoc,
+  callableOptions,
   db,
   defaultAppSettings,
   notifyEmployee,
@@ -20,6 +21,11 @@ import {
   withinCap,
 } from "./drawRules";
 import { countableSpans, parseHoursPolicy } from "./hours";
+import {
+  Controls, autoApprovalAllowed, canRecordPayment, clampDrawPercent, DEFAULT_PLATFORM_DRAW_CEILING, decide,
+  drawBlockedReason, needsSecondApproval, parseControls, validatePaymentReference, withinRequestRate,
+} from "./controls";
+import { hourBucket } from "./enquiryRules";
 import { AutoApprovePolicy, parseAutoApprove, parseFeeSchedule, shouldAutoApprove, validateFeeSchedule } from "./feeSchedule";
 
 interface DrawContext {
@@ -28,6 +34,8 @@ interface DrawContext {
   rule: PaydayRule;
   sessions: SessionSpan[];
   maxShiftMs: number;
+  controls: Controls;
+  employeeMeta: { createdAtMs: number | null; lastWorkingDayMs: number | null };
   outstanding: Array<{ id: string; amountMinor: number; createdAtMs: number }>;
   autoApprove: AutoApprovePolicy;
 }
@@ -47,9 +55,10 @@ async function readDrawContext(
   const companyRef = db.collection("companies").doc(companyId);
   const defaults = defaultAppSettings("");
 
-  const [employeeSnap, settingsSnap] = await Promise.all([
+  const [employeeSnap, settingsSnap, platformSnap] = await Promise.all([
     tx.get(employeeRef),
     tx.get(companyRef.collection("settings").doc("app")),
+    tx.get(db.collection("platform_config").doc("limits")),
   ]);
   const employee = employeeSnap.data() as EmployeeDoc | undefined;
   if (!employee) throw new HttpsError("not-found", "Employee not found.");
@@ -67,8 +76,11 @@ async function readDrawContext(
       "This company's fee schedule is not set up correctly. Please contact HR.",
     );
   }
+  // Settings are validated when saved, but the platform's ceiling is applied here too, so
+  // a value written any other way still cannot lift an employee's limit above it.
+  const ceiling = Number(platformSnap.data()?.maxDrawPercentCeiling ?? DEFAULT_PLATFORM_DRAW_CEILING);
   const limits: DrawLimits = {
-    maxDrawPercent: Number(settings.maxDrawPercent),
+    maxDrawPercent: clampDrawPercent(Number(settings.maxDrawPercent), ceiling),
     maxDrawsPerCycle: Number(settings.maxDrawsPerCycle),
     fee,
   };
@@ -105,7 +117,13 @@ async function readDrawContext(
       createdAtMs: (doc.data().createdAt as Timestamp | undefined)?.toMillis() ?? 0,
     }));
 
-  return { hourlyRate: employee.hourlyRate, limits, rule, sessions, maxShiftMs: hours.maxShiftMs, outstanding, autoApprove: parseAutoApprove(settings) };
+  return { hourlyRate: employee.hourlyRate, limits, rule, sessions, maxShiftMs: hours.maxShiftMs,
+    controls: parseControls(settings),
+    employeeMeta: {
+      createdAtMs: (employee as EmployeeDoc).createdAt?.toMillis() ?? null,
+      lastWorkingDayMs: (employee as EmployeeDoc).lastWorkingDay?.toMillis() ?? null,
+    },
+    outstanding, autoApprove: parseAutoApprove(settings) };
 }
 
 /**
@@ -114,7 +132,7 @@ async function readDrawContext(
  * the client only supplies the amount, in whole cents. Clients cannot write
  * draw_requests directly (see firestore.rules).
  */
-export const requestDraw = onCall(async (request) => {
+export const requestDraw = onCall(callableOptions, async (request) => {
   const { uid, companyId } = await requireActiveMember(request);
   const { amountMinor } = request.data as { amountMinor?: unknown };
   if (typeof amountMinor !== "number") {
@@ -131,6 +149,16 @@ export const requestDraw = onCall(async (request) => {
       currentCycleStartMs(rule, nowMs),
     );
 
+    const blocked = drawBlockedReason({ nowMs, ...ctx.employeeMeta, controls: ctx.controls });
+    if (blocked) throw new HttpsError("failed-precondition", blocked);
+
+    // At most a handful of requests an hour, so a script cannot hammer the function.
+    const rateRef = companyRef.collection("rate_limits").doc(`draw_${uid}_${hourBucket(nowMs)}`);
+    const rateCount = ((await tx.get(rateRef)).data()?.count as number | undefined) ?? 0;
+    if (!withinRequestRate(rateCount)) {
+      throw new HttpsError("resource-exhausted", "You have made several requests in the last hour. Please try again later.");
+    }
+
     const check = checkNewDraw({
       amountMinor,
       accruedMinor: accruedMinor(ctx.hourlyRate, ctx.sessions, nowMs, ctx.maxShiftMs),
@@ -143,7 +171,8 @@ export const requestDraw = onCall(async (request) => {
     // The request already passed every check above (limits, cap, fee). If the
     // company allows it, that is all a person would have verified, so approve it
     // by policy. Paying it out stays a person's job (disburseDraw).
-    const auto = shouldAutoApprove(ctx.autoApprove, amountMinor);
+    const auto = shouldAutoApprove(ctx.autoApprove, amountMinor) && autoApprovalAllowed(ctx.controls, amountMinor);
+    tx.set(rateRef, { count: rateCount + 1, expiresAt: Timestamp.fromMillis(nowMs + 2 * 3_600_000) });
     tx.set(drawRef, {
       employeeId: uid,
       amountMinor,
@@ -151,6 +180,7 @@ export const requestDraw = onCall(async (request) => {
       totalMinor: check.totalMinor,
       status: auto ? "approved" : "pending",
       autoApproved: auto,
+      needsSecondApproval: needsSecondApproval(ctx.controls, amountMinor),
       createdAt: now,
       decidedBy: auto ? "policy" : null,
       decidedAt: auto ? now : null,
@@ -207,8 +237,9 @@ export const requestDraw = onCall(async (request) => {
  * audit log entry happen atomically here, never trusted from the client.
  * Sends a push notification to the worker on completion.
  */
-export const decideDrawRequest = onCall(async (request) => {
+export const decideDrawRequest = onCall(callableOptions, async (request) => {
   const companyId = await requireCompanyAdmin(request);
+  const uid = request.auth!.uid;
   const { requestId, approve, reason } = request.data as {
     requestId: string;
     approve: boolean;
@@ -221,9 +252,10 @@ export const decideDrawRequest = onCall(async (request) => {
   const drawRef = companyRef.collection("draw_requests").doc(requestId);
   let employeeId = "";
   let amountMinor = 0;
+  let firstApprovalOnly = false;
 
   await db.runTransaction(async (tx) => {
-    const drawSnap = await tx.get(drawRef);
+    const [drawSnap, settingsDoc] = await Promise.all([tx.get(drawRef), tx.get(companyRef.collection("settings").doc("app"))]);
     if (!drawSnap.exists) throw new HttpsError("not-found", "Draw request not found.");
     const draw = drawSnap.data() as DrawRequestDoc;
     if (draw.status !== "pending") {
@@ -232,6 +264,18 @@ export const decideDrawRequest = onCall(async (request) => {
 
     employeeId = draw.employeeId;
     amountMinor = draw.amountMinor;
+
+    // Nobody decides their own advance, and a large one needs two different admins.
+    const verdict = decide({
+      uid,
+      employeeId,
+      amountMinor,
+      approve: !!approve,
+      firstApprovalBy: draw.firstApprovalBy ?? null,
+      controls: parseControls({ ...defaultAppSettings(""), ...(settingsDoc.data() ?? {}) }),
+    });
+    if (!verdict.ok) throw new HttpsError("permission-denied", verdict.reason);
+    firstApprovalOnly = verdict.outcome === "first_approval";
 
     if (approve) {
       // Re-check against live data: sessions may have been edited, the
@@ -256,6 +300,20 @@ export const decideDrawRequest = onCall(async (request) => {
       }
     }
 
+    if (firstApprovalOnly) {
+      tx.update(drawRef, { firstApprovalBy: uid, firstApprovalAt: Timestamp.now() });
+      tx.set(companyRef.collection("audit_log").doc(), {
+        type: "draw_first_approval",
+        requestId,
+        employeeId,
+        amountMinor,
+        decidedBy: uid,
+        decidedAt: Timestamp.now(),
+        timestamp: Timestamp.now(),
+      });
+      return;
+    }
+
     tx.update(drawRef, {
       status: approve ? "approved" : "rejected",
       decidedBy: request.auth!.uid,
@@ -276,6 +334,8 @@ export const decideDrawRequest = onCall(async (request) => {
     });
   });
 
+  if (firstApprovalOnly) return { ok: true, status: "pending", awaitingSecondApproval: true };
+
   await notifyEmployee(
     companyId,
     employeeId,
@@ -285,7 +345,7 @@ export const decideDrawRequest = onCall(async (request) => {
       : `Your draw request of E${formatMinor(amountMinor)} was not approved this time.`,
   );
 
-  return { ok: true };
+  return { ok: true, status: approve ? "approved" : "rejected" };
 });
 
 /**
@@ -294,9 +354,16 @@ export const decideDrawRequest = onCall(async (request) => {
  * Actual money movement is handled by the finance team outside the app
  * (bank transfer, MTN MoMo) — this records the confirmation.
  */
-export const disburseDraw = onCall(async (request) => {
+export const disburseDraw = onCall(callableOptions, async (request) => {
   const companyId = await requireCompanyAdmin(request);
-  const { requestId } = request.data as { requestId: string };
+  const uid = request.auth!.uid;
+  const { requestId, paymentReference } = request.data as { requestId: string; paymentReference?: unknown };
+
+  // The reference from the bank or mobile-money payment, so every "paid" entry can be
+  // matched to a real transaction. The app no longer invents one.
+  const refProblem = validatePaymentReference(paymentReference);
+  if (refProblem) throw new HttpsError("invalid-argument", refProblem);
+  const reference = (paymentReference as string).trim().replace(/\s+/g, " ");
 
   const companyRef = db.collection("companies").doc(companyId);
   const drawRef = companyRef.collection("draw_requests").doc(requestId);
@@ -307,6 +374,24 @@ export const disburseDraw = onCall(async (request) => {
     const snap = await tx.get(drawRef);
     if (!snap.exists) throw new HttpsError("not-found", "Draw request not found.");
     const draw = snap.data() as DrawRequestDoc;
+    const [settingsDoc, employeeDoc, duplicate] = await Promise.all([
+      tx.get(companyRef.collection("settings").doc("app")),
+      tx.get(companyRef.collection("employees").doc(draw.employeeId)),
+      tx.get(companyRef.collection("draw_requests").where("disbursementRef", "==", reference).limit(1)),
+    ]);
+    const allowed = canRecordPayment({
+      uid,
+      employeeId: draw.employeeId,
+      decidedBy: draw.decidedBy ?? null,
+      firstApprovalBy: draw.firstApprovalBy ?? null,
+      payoutChangedAtMs: (employeeDoc.data() as EmployeeDoc | undefined)?.payoutChangedAt?.toMillis() ?? null,
+      nowMs: Date.now(),
+      controls: parseControls({ ...defaultAppSettings(""), ...(settingsDoc.data() ?? {}) }),
+    });
+    if (!allowed.ok) throw new HttpsError("permission-denied", allowed.reason);
+    if (!duplicate.empty && duplicate.docs[0].id !== requestId) {
+      throw new HttpsError("already-exists", "That payment reference is already recorded against another advance.");
+    }
 
     if (draw.status !== "approved") {
       throw new HttpsError("failed-precondition", "Only approved draws can be disbursed.");
@@ -317,7 +402,7 @@ export const disburseDraw = onCall(async (request) => {
 
     employeeId = draw.employeeId;
     amountMinor = draw.amountMinor;
-    const disbursementRef = `DISP-${requestId.slice(0, 8).toUpperCase()}`;
+    const disbursementRef = reference;
 
     tx.update(drawRef, {
       disbursementStatus: "completed",
@@ -331,7 +416,7 @@ export const disburseDraw = onCall(async (request) => {
       employeeId,
       amountMinor,
       disbursementRef,
-      disbursedBy: request.auth!.uid,
+      disbursedBy: uid,
       disbursedAt: Timestamp.now(),
       timestamp: Timestamp.now(),
     });

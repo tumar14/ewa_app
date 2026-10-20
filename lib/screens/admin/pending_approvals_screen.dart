@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../models/draw_request.dart';
@@ -223,9 +224,20 @@ class _ApprovalCardState extends ConsumerState<_ApprovalCard> {
   Future<void> _decide(bool approve, {String? reason}) async {
     setState(() => _loading = true);
     try {
-      await ref
+      final firstOfTwo = await ref
           .read(drawRepositoryProvider)
           .decide(requestId: widget.request.id, approve: approve, reason: reason);
+      if (firstOfTwo && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Your approval is recorded. A different admin must give the second approval.')),
+        );
+      }
+    } on FirebaseFunctionsException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message ?? 'Could not record that. Please try again.')),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -343,6 +355,10 @@ class _ApprovalCardState extends ConsumerState<_ApprovalCard> {
                         [
                           if (dept.isNotEmpty) dept,
                           dateFmt.format(widget.request.createdAt.toLocal()),
+                          if (widget.request.firstApprovalBy != null)
+                            'first approval given, needs a second admin'
+                          else if (widget.request.needsSecondApproval)
+                            'needs two admins',
                         ].join(' · '),
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: context.onSurface(0.55),

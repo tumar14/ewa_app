@@ -53,9 +53,21 @@ service cloud.firestore {
 
       // employees/{uid} — profile doc id matches the Firebase Auth uid.
       match /employees/{employeeId} {
+        // Every admin edit names the admin and carries the server's time, so the audit log
+        // (written by onEmployeeWritten) records a real person. createdAt and payoutChangedAt
+        // are set by the server's clock or by that function: an admin cannot backdate a new
+        // employee past the "new employee wait", or clear the hold after a payout change.
+        function stamped() {
+          return request.resource.data.lastEditedBy == request.auth.uid &&
+            request.resource.data.lastEditedAt == request.time;
+        }
         allow read: if isSelfInCompany(companyId, employeeId) || isCompanyAdmin(companyId);
-        // Admins manage all profile fields, only within their own company.
-        allow write: if isCompanyAdmin(companyId);
+        // Admins manage profile fields, only within their own company. No deletes: people are deactivated.
+        allow create: if isCompanyAdmin(companyId) && stamped() &&
+          request.resource.data.createdAt == request.time &&
+          !request.resource.data.keys().hasAny(['payoutChangedAt']);
+        allow update: if isCompanyAdmin(companyId) && stamped() &&
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['createdAt', 'payoutChangedAt']);
         // Workers may update only safe self-service fields on their own doc:
         //   consentedAt  — first-login consent acknowledgement
         //   mustChangePassword — cleared after forced password change
@@ -94,16 +106,20 @@ service cloud.firestore {
         }
         function adminCreateOk() {
           let src = request.resource.data.source;
-          return (src == 'adminEdit' && companySetting('allowManualHourEdits') && request.resource.data.editedBy == request.auth.uid)
+          // Never signed off on creation: a second person does that (signOffSessions).
+          return request.resource.data.reviewedBy == null && request.resource.data.reviewedAt == null &&
+            ((src == 'adminEdit' && companySetting('allowManualHourEdits') && request.resource.data.editedBy == request.auth.uid)
             || (src == 'externalImport' && companySetting('allowAttendanceImport') && request.resource.data.editedBy == request.auth.uid)
-            || !(src in ['adminEdit', 'externalImport']);
+            || !(src in ['adminEdit', 'externalImport']));
         }
         function adminUpdateOk() {
           let changed = request.resource.data.diff(resource.data).affectedKeys();
-          return changed.hasOnly(['flagged', 'reviewedBy', 'reviewedAt', 'photoUrl'])
+          // Sign-off is not here: it goes through signOffSessions so nobody signs off their own work.
+          return changed.hasOnly(['flagged', 'photoUrl'])
             || (changed.hasOnly(['clockOutTs']) && resource.data.clockOutTs == null)
             || (request.resource.data.source == 'adminEdit' && companySetting('allowManualHourEdits')
-                && request.resource.data.editedBy == request.auth.uid && request.resource.data.editedAt == request.time);
+                && request.resource.data.editedBy == request.auth.uid && request.resource.data.editedAt == request.time
+                && request.resource.data.reviewedBy == null && request.resource.data.reviewedAt == null);
         }
         function workerPunchOk() {
           let d = request.resource.data;
@@ -157,11 +173,13 @@ service cloud.firestore {
         allow write: if false;
       }
 
-      // settings/{app|org|rates|permissions} — publicly readable so branding
-      // appears before sign-in. Only this company's admins may write.
+      // settings/{app|previous|org|rates|permissions} — readable by people in this company
+      // (they hold limits, fees and pay rates, so not by the public). app and previous are
+      // written only by the updateSettings function, which validates every change and
+      // writes it to the audit log; the others are edited by this company's admins.
       match /settings/{docId} {
-        allow read: if true;
-        allow write: if isCompanyAdmin(companyId);
+        allow read: if isSignedIn() && (myCompanyId() == companyId || isPlatformAdmin());
+        allow write: if isCompanyAdmin(companyId) && !(docId in ['app', 'previous']);
       }
 
       // payroll_runs — written only by the runPayroll Cloud Function
@@ -236,6 +254,19 @@ service cloud.firestore {
         request.resource.data.industries is list &&
         request.resource.data.industries.size() >= 1 &&
         request.resource.data.industries.size() <= 50 &&
+        request.resource.data.updatedBy == request.auth.uid;
+      allow delete: if false;
+    }
+
+    // platform_config/limits — the highest share of earned wages any company may allow to be
+    // advanced. Only the platform admin sees or sets it; the functions read it directly.
+    match /platform_config/limits {
+      allow read: if isPlatformAdmin();
+      allow create, update: if isPlatformAdmin() &&
+        request.resource.data.keys().hasOnly(['maxDrawPercentCeiling', 'updatedAt', 'updatedBy']) &&
+        request.resource.data.maxDrawPercentCeiling is number &&
+        request.resource.data.maxDrawPercentCeiling >= 0.05 &&
+        request.resource.data.maxDrawPercentCeiling <= 1 &&
         request.resource.data.updatedBy == request.auth.uid;
       allow delete: if false;
     }

@@ -137,7 +137,12 @@ class _RosterTile extends ConsumerWidget {
                         ],
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 4),
+                    IconButton(
+                      tooltip: 'Issue a new code',
+                      icon: const Icon(Icons.autorenew, size: 20),
+                      onPressed: () => _reissue(context, ref),
+                    ),
                     IconButton(
                       tooltip: 'Remove',
                       icon: const Icon(Icons.delete_outline, size: 20),
@@ -148,6 +153,29 @@ class _RosterTile extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _reissue(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Issue a new code?'),
+        content: Text('The current code for ${entry.name} stops working, and the seat is unlocked if it was locked after wrong tries.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('New code')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      final code = await ref.read(rosterRepositoryProvider).reissueCode(entry.employeeNumber);
+      await Clipboard.setData(ClipboardData(text: code));
+      messenger.showSnackBar(SnackBar(content: Text('New claim code $code copied. Give it to ${entry.name}.')));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Could not issue a new code: $e')));
+    }
   }
 
   void _copyCode(BuildContext context, String code) {

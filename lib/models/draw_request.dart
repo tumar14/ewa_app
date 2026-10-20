@@ -18,6 +18,10 @@ class DrawRequest {
 
   /// True when the server approved it by company policy rather than a person.
   final bool autoApproved;
+
+  /// Above the company's two-admin threshold: a second, different admin must also approve.
+  final bool needsSecondApproval;
+  final String? firstApprovalBy;
   final DateTime? decidedAt;
   /// Set once a payroll run has deducted this draw from payout. Null means
   /// "still outstanding" — counts against the worker's per-cycle cap.
@@ -37,6 +41,8 @@ class DrawRequest {
     this.status = DrawStatus.pending,
     this.decidedBy,
     this.autoApproved = false,
+    this.needsSecondApproval = false,
+    this.firstApprovalBy,
     this.decidedAt,
     this.payrollRunId,
     this.disbursementStatus,
@@ -59,6 +65,8 @@ class DrawRequest {
       createdAt: (map['createdAt'] as Timestamp).toDate(),
       decidedBy: map['decidedBy'] as String?,
       autoApproved: map['autoApproved'] == true,
+      needsSecondApproval: map['needsSecondApproval'] == true,
+      firstApprovalBy: map['firstApprovalBy'] as String?,
       decidedAt: (map['decidedAt'] as Timestamp?)?.toDate(),
       payrollRunId: map['payrollRunId'] as String?,
       disbursementStatus: map['disbursementStatus'] == null

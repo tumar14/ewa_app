@@ -48,7 +48,29 @@ class RosterRepository {
       ...entry.toMap(),
       'employeeNumber': id,
       'claimCode': code,
+      ..._freshCodeFields(),
     });
+    return code;
+  }
+
+  /// Marks a code as just issued: it expires from here (Admin Settings), and any lock
+  /// from wrong guesses is cleared.
+  Map<String, dynamic> _freshCodeFields() => {
+        'claimCodeIssuedAt': FieldValue.serverTimestamp(),
+        'claimFailures': 0,
+        'claimLockedUntil': null,
+      };
+
+  /// Gives an unclaimed seat a new code (the old one stops working) and unlocks it.
+  /// Returns the new code to hand to the employee.
+  Future<String> reissueCode(String employeeNumber) async {
+    final id = RosterEntry.normalize(employeeNumber);
+    final doc = await _collection.doc(id).get();
+    if (!doc.exists || (doc.data()?['claimed'] as bool? ?? false)) {
+      throw StateError('There is no unclaimed seat for $employeeNumber.');
+    }
+    final code = RosterEntry.generateCode();
+    await _collection.doc(id).update({'claimCode': code, ..._freshCodeFields()});
     return code;
   }
 
@@ -81,7 +103,7 @@ class RosterRepository {
             ? RosterEntry.generateCode()
             : RosterEntry.normalizeCode(entry.claimCode);
         batch.set(_collection.doc(id),
-            {...entry.toMap(), 'employeeNumber': id, 'claimCode': code});
+            {...entry.toMap(), 'employeeNumber': id, 'claimCode': code, ..._freshCodeFields()});
         codes[id] = code;
         written++;
       }

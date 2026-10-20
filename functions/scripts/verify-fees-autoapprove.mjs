@@ -83,7 +83,7 @@ async function main() {
   check("a request entry is also logged", audits.some((a) => a.type === "draw_request"));
   const again = await call("decideDrawRequest", { requestId: r30.result.requestId, approve: false }, A.admin.token);
   check("an admin cannot re-decide an automatically approved advance", again.err === "FAILED_PRECONDITION", again.msg);
-  const paid = await call("disburseDraw", { requestId: r30.result.requestId }, A.admin.token);
+  const paid = await call("disburseDraw", { requestId: r30.result.requestId, paymentReference: "TEST/2026/FEES-1" }, A.admin.token);
   check("finance can still record the payment", paid.status === 200, paid.msg);
 
   const r150 = await call("requestDraw", { amountMinor: 15_000 }, w1.token);

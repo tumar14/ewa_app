@@ -37,6 +37,7 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
 
   late String _role;
   late DisbursementMethod _disbursementMethod;
+  DateTime? _lastWorkingDay;
 
   bool _saving = false;
   String? _error;
@@ -56,6 +57,7 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
     _departmentCtrl = TextEditingController(text: e?.department ?? '');
     _role = e?.role ?? 'worker';
     _disbursementMethod = e?.disbursementMethod ?? DisbursementMethod.bankTransfer;
+    _lastWorkingDay = e?.lastWorkingDay;
     _departmentCtrl.addListener(() => setState(() {}));
     _acctCtrl = TextEditingController(text: e?.disbursementDetails['accountNumber'] ?? '');
     _bankCtrl = TextEditingController(text: e?.disbursementDetails['bankName'] ?? '');
@@ -122,6 +124,7 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
             disbursementDetails: _disbursementDetails,
             fcmToken: widget.employee!.fcmToken,
             active: widget.employee!.active,
+            lastWorkingDay: _lastWorkingDay,
           ),
           // null = leave existing PIN; empty = clear it; 4 digits = update it
           rawPin: rawPin.isEmpty ? null : rawPin,
@@ -377,6 +380,40 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
                 return null;
               },
             ),
+            if (!_isCreate) ...[
+              const SizedBox(height: 12),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Last working day'),
+                subtitle: Text(
+                  _lastWorkingDay == null
+                      ? 'Not leaving. Set a date when someone resigns or is dismissed, so advances pause before final pay.'
+                      : '${_lastWorkingDay!.year}-${_lastWorkingDay!.month.toString().padLeft(2, '0')}-${_lastWorkingDay!.day.toString().padLeft(2, '0')}',
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_lastWorkingDay != null)
+                      IconButton(
+                        tooltip: 'Clear',
+                        icon: const Icon(Icons.close),
+                        onPressed: () => setState(() => _lastWorkingDay = null),
+                      ),
+                    const Icon(Icons.event_outlined),
+                  ],
+                ),
+                onTap: () async {
+                  final now = DateTime.now();
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: _lastWorkingDay ?? now,
+                    firstDate: DateTime(now.year - 1),
+                    lastDate: DateTime(now.year + 2),
+                  );
+                  if (picked != null) setState(() => _lastWorkingDay = picked);
+                },
+              ),
+            ],
             const SizedBox(height: 16),
             DropdownButtonFormField<DisbursementMethod>(
               initialValue: _disbursementMethod,

@@ -15,6 +15,22 @@ class PlatformConfigRepository {
   Stream<List<String>> watchIndustries() =>
       _doc.snapshots().map((snap) => industriesFromMap(snap.data()));
 
+  DocumentReference<Map<String, dynamic>> get _limits => _doc.parent.doc('limits');
+
+  /// The highest share of earned wages any company may allow to be advanced (default 50%).
+  Stream<double> watchDrawCeiling() => _limits.snapshots().map((snap) {
+        final v = snap.data()?['maxDrawPercentCeiling'];
+        return v is num && v >= 0.05 && v <= 1 ? v.toDouble() : 0.5;
+      });
+
+  Future<void> saveDrawCeiling(double ceiling) {
+    return _limits.set({
+      'maxDrawPercentCeiling': ceiling,
+      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedBy': FirebaseAuth.instance.currentUser!.uid,
+    });
+  }
+
   Future<void> saveIndustries(List<String> industries) {
     return _doc.set({
       'industries': industries,

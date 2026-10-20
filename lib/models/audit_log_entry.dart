@@ -30,7 +30,7 @@ class AuditLogEntry {
   }
 
   String? get actorId {
-    for (final key in ['createdBy', 'deactivatedBy', 'decidedBy', 'disbursedBy', 'performedBy']) {
+    for (final key in ['createdBy', 'deactivatedBy', 'decidedBy', 'disbursedBy', 'performedBy', 'changedBy', 'addedBy', 'signedBy']) {
       final v = data[key];
       if (v is String) return v;
     }
@@ -56,6 +56,20 @@ class AuditLogEntry {
         final approved = data['approved'] == true;
         final by = data['auto'] == true ? ' (automatically, by company policy)' : '';
         return '${approved ? 'Approved' : 'Declined'}$by draw of E${_money('amountMinor')} for ${employeeId ?? ''}';
+      case 'draw_first_approval':
+        return 'First approval given for a draw of E${_money('amountMinor')} for ${employeeId ?? ''}; a second admin is needed';
+      case 'settings_changed':
+        final changes = (data['changes'] as List?) ?? const [];
+        final fields = [for (final c in changes) if (c is Map) '${c['field']}'];
+        return 'Changed settings: ${fields.isEmpty ? '(none)' : fields.join(', ')}';
+      case 'employee_added':
+        return 'Added employee ${data['name'] ?? ''} (${data['role'] ?? 'worker'})';
+      case 'employee_changed':
+        final changes = (data['changes'] as List?) ?? const [];
+        final fields = [for (final c in changes) if (c is Map) '${c['field']}'];
+        return 'Changed employee ${employeeId ?? ''}: ${fields.join(', ')}';
+      case 'time_signoff':
+        return 'Signed off ${data['count'] ?? 0} hour record(s)';
       case 'disbursement':
         return 'Disbursed E${_money('amountMinor')} to ${employeeId ?? ''} (${data['disbursementRef'] ?? ''})';
       case 'payroll_run':
