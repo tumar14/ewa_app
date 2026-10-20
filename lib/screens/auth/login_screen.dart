@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/firebase_providers.dart';
 import '../../providers/settings_providers.dart';
 import '../../theme/glass_theme.dart';
+import '../../utils/auth_errors.dart';
 import '../../widgets/glass_components.dart';
 import 'claim_account_screen.dart';
 import 'forgot_password_screen.dart';
@@ -34,7 +35,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             _passwordController.text,
           );
     } catch (e) {
-      setState(() => _error = 'Incorrect email or password. Please try again.');
+      setState(() => _error = signInErrorMessage(e));
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
