@@ -243,6 +243,18 @@ SystemUiOverlayStyle brandStatusBarStyle(bool dark) => SystemUiOverlayStyle(
       systemNavigationBarContrastEnforced: false,
     );
 
+/// MaterialApp.builder: matches the system bars to the theme and paints the page
+/// gradient behind every route. The glass app bars and the bottom menu are
+/// translucent white, so without this they sit on the bare window (black on
+/// Android in dark mode) and come out grey instead of navy.
+Widget brandAppBuilder(BuildContext context, Widget? child) {
+  final dark = Theme.of(context).brightness == Brightness.dark;
+  return AnnotatedRegion<SystemUiOverlayStyle>(
+    value: brandStatusBarStyle(dark),
+    child: GlassBackground(child: child ?? const SizedBox.shrink()),
+  );
+}
+
 /// Floating pill-shaped glass bottom navigation bar.
 class GlassNavigationBar extends StatelessWidget {
   final int selectedIndex;

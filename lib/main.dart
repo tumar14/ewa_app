@@ -9,7 +9,6 @@ import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'firebase_options.dart';
@@ -98,15 +97,7 @@ class EwaApp extends ConsumerWidget {
       theme: buildGlassThemeLight(),
       darkTheme: buildGlassTheme(),
       themeMode: themeMode,
-      // Android's status bar otherwise falls back to a grey that clashes with
-      // the brand. Match it to the active theme.
-      builder: (context, child) {
-        final dark = Theme.of(context).brightness == Brightness.dark;
-        return AnnotatedRegion<SystemUiOverlayStyle>(
-          value: brandStatusBarStyle(dark),
-          child: child ?? const SizedBox.shrink(),
-        );
-      },
+      builder: brandAppBuilder,
       home: const AuthGate(),
     );
   }
