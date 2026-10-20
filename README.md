@@ -88,3 +88,13 @@ static site reads directly from Firestore (public read; only the platform admin 
   (`scripts/build-hosting.mjs`) embeds it as the fallback, so run `cd functions && npm run build` first.
   `lib/models/platform_config.dart` mirrors it and a test keeps the two identical.
 - After changing the rules, deploy them (`firebase deploy --only firestore:rules`) or the site cannot read the list.
+
+## Platform admin overview
+
+**Platform Admin > Overview** (the chart icon) shows counts for every company: active employees and workers,
+advances this pay cycle, requests waiting for approval or payout, and what the company still owes in open
+settlements. It is built by the `platformOverview` Cloud Function (platform admin only) from Firestore count
+queries, and returns numbers plus the company's public details, never an employee's name or an individual
+amount. The platform admin still cannot read employees, advances or settlements directly (`firestore.rules`).
+Check it with `GCLOUD_PROJECT=ewa-app-cb943 node scripts/verify-overview.mjs` while the emulators run.
+It needs Cloud Functions deployed (Blaze).

@@ -15,6 +15,7 @@ import {
 export { requestDraw, decideDrawRequest, disburseDraw } from "./draws";
 export { runPayroll } from "./payroll";
 export { submitEnquiry } from "./enquiries";
+export { platformOverview } from "./overview";
 export {
   createSettlement,
   confirmDeductions,
@@ -260,8 +261,8 @@ export const claimSeat = onCall(async (request) => {
 /**
  * Creates a new company shell (platform-admin only): the public company
  * doc + a unique short code + default settings subdocs + the company's
- * first admin employee. This is deliberately the ONLY thing a platform
- * admin can do to a company via this API — no function here or elsewhere
+ * first admin employee. Apart from the aggregate counts in platformOverview
+ * (numbers only, no names or individual amounts), no function here or elsewhere
  * gives a platform admin read access to any company's employees, draws,
  * time sessions, payroll, or audit log.
  */

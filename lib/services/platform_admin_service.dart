@@ -1,4 +1,5 @@
 import 'package:cloud_functions/cloud_functions.dart';
+import '../models/platform_overview.dart';
 
 /// Thrown when creating a company fails, carrying a display-ready message.
 class CreateCompanyException implements Exception {
@@ -33,6 +34,19 @@ class PlatformAdminService {
 
   PlatformAdminService({FirebaseFunctions? functions})
       : _functions = functions ?? FirebaseFunctions.instance;
+
+  /// Counts per company (employees, advances, what is owed). Numbers only: the
+  /// server never returns a person's name or an individual amount.
+  Future<PlatformOverview> platformOverview() async {
+    try {
+      final result = await _functions.httpsCallable('platformOverview').call();
+      return PlatformOverview.fromMap(result.data as Map);
+    } on FirebaseFunctionsException catch (e) {
+      throw CreateCompanyException(e.message ?? 'Could not load the overview. Please try again.');
+    } catch (_) {
+      throw CreateCompanyException('Could not load the overview. Please check your connection and try again.');
+    }
+  }
 
   /// Records a verified incoming bank payment against a company's settlement
   /// reference. [providerTransactionId] is the bank's own id for the line, so
