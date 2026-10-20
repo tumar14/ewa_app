@@ -83,12 +83,40 @@ export interface SessionSpan {
   clockOutMs: number | null; // null = still open, counted up to `nowMs`
 }
 
+/**
+ * Milliseconds of paid time in `sessions` as at `nowMs`. Records come from phones,
+ * kiosks, uploads and manual edits, so they are not taken at face value: time that
+ * has not happened yet is ignored, no single record counts for longer than
+ * `maxShiftMs`, and overlapping records are merged so the same hour is never paid twice.
+ */
+export function countableMs(sessions: SessionSpan[], nowMs: number, maxShiftMs = Infinity): number {
+  const spans: Array<[number, number]> = [];
+  for (const s of sessions) {
+    if (s.clockInMs >= nowMs) continue;
+    const end = Math.min(s.clockOutMs ?? nowMs, nowMs);
+    if (end <= s.clockInMs) continue;
+    spans.push([s.clockInMs, Math.min(end, s.clockInMs + maxShiftMs)]);
+  }
+  spans.sort((a, b) => a[0] - b[0]);
+  let total = 0;
+  let from = 0;
+  let to = -Infinity;
+  for (const [a, b] of spans) {
+    if (a > to) {
+      if (to > -Infinity) total += to - from;
+      from = a;
+      to = b;
+    } else if (b > to) {
+      to = b;
+    }
+  }
+  if (to > -Infinity) total += to - from;
+  return total;
+}
+
 /** hourlyRate * whole minutes worked / 60, in minor units (matches WageCalculator.accruedWages). */
-export function accruedMinor(hourlyRate: number, sessions: SessionSpan[], nowMs: number): number {
-  const totalMs = sessions.reduce(
-    (sum, s) => sum + ((s.clockOutMs ?? nowMs) - s.clockInMs),
-    0,
-  );
+export function accruedMinor(hourlyRate: number, sessions: SessionSpan[], nowMs: number, maxShiftMs = Infinity): number {
+  const totalMs = countableMs(sessions, nowMs, maxShiftMs);
   return Math.round((hourlyRate * 100 * Math.floor(totalMs / 60_000)) / 60);
 }
 

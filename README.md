@@ -98,3 +98,23 @@ queries, and returns numbers plus the company's public details, never an employe
 amount. The platform admin still cannot read employees, advances or settlements directly (`firestore.rules`).
 Check it with `GCLOUD_PROJECT=ewa-app-cb943 node scripts/verify-overview.mjs` while the emulators run.
 It needs Cloud Functions deployed (Blaze).
+
+## Attendance, manual hours and settings reset
+
+- **Where hours come from:** workers clock in and out in the app (the server stamps the time), a kiosk run by an
+  admin, an uploaded file (More > Upload attendance), or an admin adding or correcting a record
+  (Workforce > a person > + / the menu on a record).
+- **Management controls** (Admin Settings > Attendance & hours): allow or forbid manual changes, allow or forbid
+  uploads, require supervisor sign-off before time counts towards advances, and the longest single record
+  (default 14 hours). `firestore.rules` read these settings, so switching them off stops the writes themselves.
+- **Every manual change** needs a reason, is marked on the record (`source: adminEdit | externalImport`), and
+  adds an entry to the append-only `time_edits` collection (who, server time, why, times before and after).
+  Records are never deleted: a wrong one is voided.
+- **What the server counts** (`functions/src/hours.ts`, `drawRules.countableMs`): voided and (if required)
+  unsigned records are ignored, time that has not happened yet is ignored, one record is capped, and overlapping
+  records are merged so the same hour is never paid twice. The app mirrors this in `lib/utils/attendance_rules.dart`.
+- **Reset / restore:** Admin Settings has "Reset to defaults" and "Restore previous". Saving keeps the
+  replaced values at `settings/previous`, so a reset can be undone. Neither applies until Save is pressed.
+- **Deploying:** these rules need `firebase deploy --only firestore:rules`, and the accrual change needs the
+  functions deployed (Blaze). Until the new rules are live, the previous, looser rules still apply.
+- **Checks:** `GCLOUD_PROJECT=ewa-app-cb943 node scripts/verify-attendance.mjs` with the emulators running.

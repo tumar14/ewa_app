@@ -75,19 +75,76 @@ service cloud.firestore {
         allow read, write: if isCompanyAdmin(companyId);
       }
 
-      // time_sessions — a worker can clock themselves in/out; only this
-      // company's admins can edit sessions after the fact (dispute
-      // resolution, flags).
+      // time_sessions — the hours that earned wages are measured from, so a
+      // worker cannot write them freely:
+      //  * a worker may only clock themselves in or out, and only with the
+      //    SERVER's time (request.time), never a time their phone supplies, so
+      //    nothing can be backdated, made up or left running in the future;
+      //  * a new worker punch carries no sign-off, flag or photo of its own;
+      //  * a company admin may run a kiosk, sign off, flag, and (when the
+      //    company's settings allow it) add, correct or void hours by hand or
+      //    by upload. Those records are marked (source adminEdit / externalImport),
+      //    name who made the change, and are logged in time_edits.
+      // Nothing is ever deleted: a wrong record is voided, so the history stays.
+      // The server also caps and merges whatever is recorded before it counts
+      // towards an advance (functions/src/hours.ts).
       match /time_sessions/{sessionId} {
+        function companySetting(flag) {
+          return get(/databases/$(database)/documents/companies/$(companyId)/settings/app).data.get(flag, true) == true;
+        }
+        function adminCreateOk() {
+          let src = request.resource.data.source;
+          return (src == 'adminEdit' && companySetting('allowManualHourEdits') && request.resource.data.editedBy == request.auth.uid)
+            || (src == 'externalImport' && companySetting('allowAttendanceImport') && request.resource.data.editedBy == request.auth.uid)
+            || !(src in ['adminEdit', 'externalImport']);
+        }
+        function adminUpdateOk() {
+          let changed = request.resource.data.diff(resource.data).affectedKeys();
+          return changed.hasOnly(['flagged', 'reviewedBy', 'reviewedAt', 'photoUrl'])
+            || (changed.hasOnly(['clockOutTs']) && resource.data.clockOutTs == null)
+            || (request.resource.data.source == 'adminEdit' && companySetting('allowManualHourEdits')
+                && request.resource.data.editedBy == request.auth.uid && request.resource.data.editedAt == request.time);
+        }
+        function workerPunchOk() {
+          let d = request.resource.data;
+          return d.keys().hasOnly(['employeeId', 'clockInTs', 'clockOutTs', 'source', 'flagged', 'photoUrl', 'reviewedBy', 'reviewedAt'])
+            && d.employeeId == request.auth.uid
+            && d.clockInTs == request.time
+            && d.clockOutTs == null
+            && d.source == 'manual'
+            && d.flagged == false
+            && d.photoUrl == null
+            && d.reviewedBy == null
+            && d.reviewedAt == null;
+        }
+
         allow read: if isCompanyAdmin(companyId) ||
           (isSignedIn() && resource.data.employeeId == request.auth.uid);
-        allow create: if isCompanyAdmin(companyId) ||
-          (isSignedIn() && request.resource.data.employeeId == request.auth.uid);
-        allow update: if isCompanyAdmin(companyId) ||
+        allow create: if (isCompanyAdmin(companyId) && adminCreateOk()) ||
+          (isSignedIn() && workerPunchOk());
+        allow update: if (isCompanyAdmin(companyId) && adminUpdateOk()) ||
           (isSignedIn() && resource.data.employeeId == request.auth.uid &&
-            // workers may only clock themselves out, not edit other fields
-            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['clockOutTs']));
-        allow delete: if isCompanyAdmin(companyId);
+            // workers may only clock themselves out, once, at the server's time
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['clockOutTs']) &&
+            resource.data.clockOutTs == null &&
+            request.resource.data.clockOutTs == request.time &&
+            request.time > resource.data.clockInTs);
+        allow delete: if false;
+      }
+
+      // time_edits — append-only record of every manual change to hours: who,
+      // when (server time), why, and the times before and after. Admins can
+      // add entries and read them; nobody can change or remove one.
+      match /time_edits/{editId} {
+        allow read: if isCompanyAdmin(companyId);
+        allow create: if isCompanyAdmin(companyId) &&
+          request.resource.data.keys().hasOnly(['sessionId', 'employeeId', 'action', 'before', 'after', 'reason', 'editedBy', 'at', 'batchId', 'count']) &&
+          request.resource.data.action in ['add', 'edit', 'void', 'import'] &&
+          request.resource.data.editedBy == request.auth.uid &&
+          request.resource.data.at == request.time &&
+          request.resource.data.reason is string &&
+          request.resource.data.reason.size() >= 5 && request.resource.data.reason.size() <= 300;
+        allow update, delete: if false;
       }
 
       // draw_requests — read-only for clients. Workers create requests through

@@ -41,7 +41,7 @@ Future<String> _performKioskPunch({
 }) async {
   final open = await sessionRepo.watchOpenSession(employeeId).first;
   if (open != null) {
-    await sessionRepo.clockOut(open.id, DateTime.now());
+    await sessionRepo.clockOut(open.id);
     if (photo != null) {
       await sessionRepo.uploadPunchPhoto(open.id, photo);
     }
@@ -139,7 +139,7 @@ class _ManualClockingState extends ConsumerState<_ManualClocking> {
     try {
       await ref
           .read(timeSessionRepositoryProvider)
-          .clockOut(sessionId, DateTime.now());
+          .clockOut(sessionId);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

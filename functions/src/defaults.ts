@@ -45,6 +45,10 @@ export function defaultAppSettings(companyName: string) {
     autoApproveMaxMinor: null as number | null,
     maxDrawsPerCycle: 2,
     clockSource: "manual",
+    allowManualHourEdits: true,
+    allowAttendanceImport: true,
+    maxShiftHours: 14,
+    countOnlyReviewedHours: false,
     disbursementPolicy: "bankTransfer",
     paydayRule: { type: "lastDayOfMonth", dayOfMonth: 25, weekday: 5 },
   };

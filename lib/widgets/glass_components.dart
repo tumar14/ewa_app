@@ -159,9 +159,12 @@ class GlassCard extends StatelessWidget {
                     ),
                   ),
                 ),
-              padding != null
-                  ? Padding(padding: padding!, child: child)
-                  : child,
+              // List tiles and switches paint their tap effect on the nearest Material;
+              // without one here it would be hidden behind the card's tinted box.
+              Material(
+                type: MaterialType.transparency,
+                child: padding != null ? Padding(padding: padding!, child: child) : child,
+              ),
             ],
           ),
         ),

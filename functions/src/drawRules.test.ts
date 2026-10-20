@@ -60,7 +60,7 @@ test("accrued: closed and open sessions, whole minutes only, in cents", () => {
 
 test("accrued: fractional hourly rate rounds once to the nearest cent", () => {
   const sessions = [{ clockInMs: 0, clockOutMs: 20 * 60_000 }]; // 20 minutes
-  assert.equal(accruedMinor(33.33, sessions, 0), 1111); // 33.33 * 20/60 = 11.11
+  assert.equal(accruedMinor(33.33, sessions, 20 * 60_000), 1111); // 33.33 * 20/60 = 11.11
 });
 
 const limits = { maxDrawPercent: 0.5, maxDrawsPerCycle: 2, fee: { mode: "percent" as const, percent: 0.05 } };

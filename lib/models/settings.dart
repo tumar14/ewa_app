@@ -57,6 +57,11 @@ class PaydayRule {
 
 // ── App settings ──────────────────────────────────────────────────────────────
 
+int _shiftHours(Object? raw) {
+  final n = raw is num ? raw.toInt() : 14;
+  return n >= 1 && n <= 24 ? n : 14;
+}
+
 class AppSettings {
   final String companyName;
   final double maxDrawPercent;
@@ -65,6 +70,18 @@ class AppSettings {
   final FeeSchedule feeSchedule;
   final int maxDrawsPerCycle;
   final ClockSource clockSource;
+
+  /// Whether admins may add, correct or void hours by hand (each change needs a
+  /// reason and is logged), and whether they may upload an attendance file.
+  final bool allowManualHourEdits;
+  final bool allowAttendanceImport;
+
+  /// The longest a single time record can count for. The server enforces it, so a
+  /// forgotten clock-out or a mistyped upload cannot add unlimited earned wages.
+  final int maxShiftHours;
+
+  /// When on, only time a supervisor has signed off counts towards advances.
+  final bool countOnlyReviewedHours;
   final DisbursementMethod disbursementPolicy;
   final PaydayRule paydayRule;
 
@@ -81,6 +98,10 @@ class AppSettings {
     this.feeSchedule = const FeeSchedule.percent(0.05),
     this.maxDrawsPerCycle = 2,
     this.clockSource = ClockSource.manual,
+    this.allowManualHourEdits = true,
+    this.allowAttendanceImport = true,
+    this.maxShiftHours = 14,
+    this.countOnlyReviewedHours = false,
     this.disbursementPolicy = DisbursementMethod.bankTransfer,
     this.paydayRule = const PaydayRule(),
     this.autoApprove = false,
@@ -97,6 +118,10 @@ class AppSettings {
         (e) => e.name == map['clockSource'],
         orElse: () => ClockSource.manual,
       ),
+      allowManualHourEdits: map['allowManualHourEdits'] != false,
+      allowAttendanceImport: map['allowAttendanceImport'] != false,
+      maxShiftHours: _shiftHours(map['maxShiftHours']),
+      countOnlyReviewedHours: map['countOnlyReviewedHours'] == true,
       disbursementPolicy: DisbursementMethod.values.firstWhere(
         (e) => e.name == map['disbursementPolicy'],
         orElse: () => DisbursementMethod.bankTransfer,
@@ -114,6 +139,10 @@ class AppSettings {
         ...feeSchedule.toMap(),
         'maxDrawsPerCycle': maxDrawsPerCycle,
         'clockSource': clockSource.name,
+        'allowManualHourEdits': allowManualHourEdits,
+        'allowAttendanceImport': allowAttendanceImport,
+        'maxShiftHours': maxShiftHours,
+        'countOnlyReviewedHours': countOnlyReviewedHours,
         'disbursementPolicy': disbursementPolicy.name,
         'paydayRule': paydayRule.toMap(),
         'autoApprove': autoApprove,
@@ -126,6 +155,10 @@ class AppSettings {
     FeeSchedule? feeSchedule,
     int? maxDrawsPerCycle,
     ClockSource? clockSource,
+    bool? allowManualHourEdits,
+    bool? allowAttendanceImport,
+    int? maxShiftHours,
+    bool? countOnlyReviewedHours,
     DisbursementMethod? disbursementPolicy,
     PaydayRule? paydayRule,
     bool? autoApprove,
@@ -138,6 +171,10 @@ class AppSettings {
       feeSchedule: feeSchedule ?? this.feeSchedule,
       maxDrawsPerCycle: maxDrawsPerCycle ?? this.maxDrawsPerCycle,
       clockSource: clockSource ?? this.clockSource,
+      allowManualHourEdits: allowManualHourEdits ?? this.allowManualHourEdits,
+      allowAttendanceImport: allowAttendanceImport ?? this.allowAttendanceImport,
+      maxShiftHours: maxShiftHours ?? this.maxShiftHours,
+      countOnlyReviewedHours: countOnlyReviewedHours ?? this.countOnlyReviewedHours,
       disbursementPolicy: disbursementPolicy ?? this.disbursementPolicy,
       paydayRule: paydayRule ?? this.paydayRule,
       autoApprove: autoApprove ?? this.autoApprove,

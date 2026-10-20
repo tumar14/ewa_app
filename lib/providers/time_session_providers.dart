@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/settings.dart';
 import '../models/time_session.dart';
+import '../utils/attendance_rules.dart';
 import '../utils/pay_cycle.dart';
 import '../utils/wage_calculator.dart';
 import 'firebase_providers.dart';
@@ -57,7 +58,19 @@ final _tickerProvider = StreamProvider<int>((ref) {
 final hoursWorkedProvider = Provider.family<Duration, String>((ref, employeeId) {
   ref.watch(_tickerProvider);
   final sessions = ref.watch(cycleSessionsProvider(employeeId)).valueOrNull ?? [];
-  return sessions.fold<Duration>(Duration.zero, (sum, s) => sum + s.hoursWorked);
+  final settings = ref.watch(appSettingsProvider).valueOrNull;
+  // The same rules the server applies before time counts towards an advance:
+  // voided records out, one record capped, overlaps merged, and (if the company
+  // insists) only signed-off time.
+  final countOnlyReviewed = settings?.countOnlyReviewedHours ?? false;
+  final spans = sessions
+      .where((s) => !s.voided && (!countOnlyReviewed || s.isReviewed))
+      .map((s) => TimeSpan(s.clockIn, s.clockOut));
+  return countableDuration(
+    spans,
+    DateTime.now(),
+    maxShift: Duration(hours: settings?.maxShiftHours ?? kDefaultMaxShiftHours),
+  );
 });
 
 /// Live accrued wages for the current pay cycle (spec section 2/9 "live

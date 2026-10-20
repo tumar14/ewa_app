@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart' show XFile;
 import '../models/time_session.dart';
+import '../utils/attendance_rules.dart';
 
 class TimeSessionRepository {
   final CollectionReference<Map<String, dynamic>> _collection;
@@ -89,6 +90,9 @@ class TimeSessionRepository {
 
     final data = session.toMap();
     data['flagged'] = flagged;
+    // The server stamps the time (firestore.rules require it), so a phone's
+    // clock cannot backdate or invent hours.
+    data['clockInTs'] = FieldValue.serverTimestamp();
     final newDoc = await _collection.add(data);
 
     if (flagged && otherNearbyPunches.isNotEmpty) {
@@ -107,10 +111,11 @@ class TimeSessionRepository {
     return (sessionId: newDoc.id, flagged: flagged);
   }
 
-  Future<void> clockOut(String sessionId, DateTime clockOutTs) {
+  /// Clocks out at the server's time (firestore.rules require it).
+  Future<void> clockOut(String sessionId) {
     return _collection
         .doc(sessionId)
-        .update({'clockOutTs': Timestamp.fromDate(clockOutTs)});
+        .update({'clockOutTs': FieldValue.serverTimestamp()});
   }
 
   Future<void> flag(String sessionId, bool flagged) {
@@ -183,5 +188,178 @@ class TimeSessionRepository {
       });
     }
     return batch.commit();
+  }
+
+  // ── Manual changes by an admin ─────────────────────────────────────────────
+  // Each one writes the record and an append-only entry in time_edits in one
+  // batch: who, when (server time), why, and the times before and after.
+  // firestore.rules refuse these unless the company's settings allow them.
+
+  CollectionReference<Map<String, dynamic>> get _edits =>
+      _collection.parent!.collection('time_edits');
+
+  Map<String, dynamic>? _times(DateTime? clockIn, DateTime? clockOut) => clockIn == null
+      ? null
+      : {
+          'clockInTs': Timestamp.fromDate(clockIn),
+          'clockOutTs': clockOut == null ? null : Timestamp.fromDate(clockOut),
+        };
+
+  /// Adds hours that were never punched (a forgotten clock-in, a day worked off-site).
+  Future<String> addHours({
+    required String employeeId,
+    required DateTime clockIn,
+    required DateTime clockOut,
+    required String reason,
+    required String editorId,
+  }) async {
+    final doc = _collection.doc();
+    final batch = _collection.firestore.batch();
+    batch.set(doc, {
+      'employeeId': employeeId,
+      'clockInTs': Timestamp.fromDate(clockIn),
+      'clockOutTs': Timestamp.fromDate(clockOut),
+      'source': ClockEventSource.adminEdit.name,
+      'flagged': false,
+      'photoUrl': null,
+      'reviewedBy': editorId,
+      'reviewedAt': FieldValue.serverTimestamp(),
+      'editedBy': editorId,
+      'editedAt': FieldValue.serverTimestamp(),
+      'editReason': reason.trim(),
+    });
+    batch.set(_edits.doc(), {
+      'sessionId': doc.id,
+      'employeeId': employeeId,
+      'action': 'add',
+      'before': null,
+      'after': _times(clockIn, clockOut),
+      'reason': reason.trim(),
+      'editedBy': editorId,
+      'at': FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+    return doc.id;
+  }
+
+  /// Corrects the times on an existing record.
+  Future<void> editHours({
+    required TimeSession session,
+    required DateTime clockIn,
+    required DateTime clockOut,
+    required String reason,
+    required String editorId,
+  }) {
+    final batch = _collection.firestore.batch();
+    batch.update(_collection.doc(session.id), {
+      'clockInTs': Timestamp.fromDate(clockIn),
+      'clockOutTs': Timestamp.fromDate(clockOut),
+      'source': ClockEventSource.adminEdit.name,
+      'reviewedBy': editorId,
+      'reviewedAt': FieldValue.serverTimestamp(),
+      'editedBy': editorId,
+      'editedAt': FieldValue.serverTimestamp(),
+      'editReason': reason.trim(),
+    });
+    batch.set(_edits.doc(), {
+      'sessionId': session.id,
+      'employeeId': session.employeeId,
+      'action': 'edit',
+      'before': _times(session.clockIn, session.clockOut),
+      'after': _times(clockIn, clockOut),
+      'reason': reason.trim(),
+      'editedBy': editorId,
+      'at': FieldValue.serverTimestamp(),
+    });
+    return batch.commit();
+  }
+
+  /// Cancels a record. It stays in the history, marked void, and never counts.
+  Future<void> voidHours({
+    required TimeSession session,
+    required String reason,
+    required String editorId,
+  }) {
+    final batch = _collection.firestore.batch();
+    batch.update(_collection.doc(session.id), {
+      'voided': true,
+      'source': ClockEventSource.adminEdit.name,
+      'editedBy': editorId,
+      'editedAt': FieldValue.serverTimestamp(),
+      'editReason': reason.trim(),
+    });
+    batch.set(_edits.doc(), {
+      'sessionId': session.id,
+      'employeeId': session.employeeId,
+      'action': 'void',
+      'before': _times(session.clockIn, session.clockOut),
+      'after': null,
+      'reason': reason.trim(),
+      'editedBy': editorId,
+      'at': FieldValue.serverTimestamp(),
+    });
+    return batch.commit();
+  }
+
+  /// Which of [rows] are already recorded for the same person at the same start time.
+  Future<Set<String>> existingKeys(List<ImportRow> rows) async {
+    if (rows.isEmpty) return {};
+    final starts = rows.map((r) => r.clockIn).toList()..sort();
+    final snap = await _collection
+        .where('clockInTs', isGreaterThanOrEqualTo: Timestamp.fromDate(starts.first))
+        .where('clockInTs', isLessThanOrEqualTo: Timestamp.fromDate(starts.last))
+        .get();
+    return {
+      for (final d in snap.docs)
+        if (d.data()['clockInTs'] is Timestamp)
+          '${d.data()['employeeId']}|${(d.data()['clockInTs'] as Timestamp).millisecondsSinceEpoch}',
+    };
+  }
+
+  /// Saves an uploaded attendance file. Records already present are skipped, so
+  /// uploading the same file twice does nothing. One time_edits entry describes
+  /// the whole upload. Returns how many records were written and skipped.
+  Future<({int written, int skipped, String batchId})> importAttendance({
+    required List<ImportRow> rows,
+    required String reason,
+    required String editorId,
+  }) async {
+    final existing = await existingKeys(rows);
+    final fresh = rows.where((r) => !existing.contains(r.key)).toList();
+    final batchId = _collection.doc().id;
+    const chunk = 200;
+    for (var i = 0; i < fresh.length || i == 0; i += chunk) {
+      final batch = _collection.firestore.batch();
+      final part = fresh.skip(i).take(chunk);
+      for (final r in part) {
+        batch.set(_collection.doc(), {
+          'employeeId': r.employeeId,
+          'clockInTs': Timestamp.fromDate(r.clockIn),
+          'clockOutTs': Timestamp.fromDate(r.clockOut),
+          'source': ClockEventSource.externalImport.name,
+          'flagged': false,
+          'photoUrl': null,
+          'reviewedBy': null,
+          'reviewedAt': null,
+          'editedBy': editorId,
+          'importBatchId': batchId,
+        });
+      }
+      if (i == 0) {
+        batch.set(_edits.doc(), {
+          'sessionId': batchId,
+          'employeeId': '',
+          'action': 'import',
+          'reason': reason.trim(),
+          'editedBy': editorId,
+          'at': FieldValue.serverTimestamp(),
+          'batchId': batchId,
+          'count': fresh.length,
+        });
+      }
+      await batch.commit();
+      if (fresh.isEmpty) break;
+    }
+    return (written: fresh.length, skipped: rows.length - fresh.length, batchId: batchId);
   }
 }

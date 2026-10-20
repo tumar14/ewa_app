@@ -57,8 +57,14 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
   late final TextEditingController _ceilingCtrl;
   late int _maxDrawsPerCycle;
   late ClockSource _clockSource;
+  late bool _allowManualHourEdits;
+  late bool _allowAttendanceImport;
+  late int _maxShiftHours;
+  late bool _countOnlyReviewedHours;
   late DisbursementMethod _disbursementPolicy;
   late PaydayRule _paydayRule;
+  // Bumped when the whole form is replaced (reset / restore) so the fee editor starts over.
+  int _formVersion = 0;
 
   static const _weekdayNames = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
@@ -66,20 +72,90 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
   void initState() {
     super.initState();
     _companyNameCtrl = TextEditingController(text: widget.settings.companyName);
-    _maxDrawPercent = widget.settings.maxDrawPercent;
-    _feeSchedule = widget.settings.feeSchedule;
-    _autoApprove = widget.settings.autoApprove;
-    _hasCeiling = widget.settings.autoApproveMaxMinor != null;
-    _ceilingCtrl = TextEditingController(
-      text: widget.settings.autoApproveMaxMinor == null
-          ? ''
-          : (widget.settings.autoApproveMaxMinor! / 100).toStringAsFixed(
-              widget.settings.autoApproveMaxMinor! % 100 == 0 ? 0 : 2),
+    _ceilingCtrl = TextEditingController();
+    _load(widget.settings);
+  }
+
+  /// Puts [s] into the form. Nothing is saved until the admin presses Save.
+  void _load(AppSettings s) {
+    _maxDrawPercent = s.maxDrawPercent;
+    _feeSchedule = s.feeSchedule;
+    _feeProblem = null;
+    _autoApprove = s.autoApprove;
+    _hasCeiling = s.autoApproveMaxMinor != null;
+    _ceilingCtrl.text = s.autoApproveMaxMinor == null
+        ? ''
+        : (s.autoApproveMaxMinor! / 100).toStringAsFixed(s.autoApproveMaxMinor! % 100 == 0 ? 0 : 2);
+    _maxDrawsPerCycle = s.maxDrawsPerCycle;
+    _clockSource = s.clockSource;
+    _allowManualHourEdits = s.allowManualHourEdits;
+    _allowAttendanceImport = s.allowAttendanceImport;
+    _maxShiftHours = s.maxShiftHours;
+    _countOnlyReviewedHours = s.countOnlyReviewedHours;
+    _disbursementPolicy = s.disbursementPolicy;
+    _paydayRule = s.paydayRule;
+  }
+
+  Future<bool> _confirm(String title, String body, String action) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(body),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(action)),
+        ],
+      ),
     );
-    _maxDrawsPerCycle = widget.settings.maxDrawsPerCycle;
-    _clockSource = widget.settings.clockSource;
-    _disbursementPolicy = widget.settings.disbursementPolicy;
-    _paydayRule = widget.settings.paydayRule;
+    return ok == true;
+  }
+
+  Future<void> _resetToDefaults() async {
+    final ok = await _confirm(
+      'Reset to standard settings?',
+      'Every setting on this page goes back to its standard value: a 5% service fee, '
+          'advances up to 50% of earned wages, 2 per pay cycle, a person approves every request, '
+          'payday on the last day of the month, clocking in the app, bank transfer, '
+          'hours may be edited by admins, and a 14-hour limit for one time record.\n\n'
+          'The company name stays. Nothing changes until you press Save, and '
+          '"Restore previous settings" can bring back what you had.',
+      'Reset',
+    );
+    if (!ok || !mounted) return;
+    setState(() {
+      _load(AppSettings(companyName: _companyNameCtrl.text));
+      _formVersion++;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Standard settings loaded. Press Save to apply them.')),
+    );
+  }
+
+  Future<void> _restorePrevious() async {
+    final previous = await ref.read(settingsRepositoryProvider).previous();
+    if (!mounted) return;
+    if (previous == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('There are no earlier settings to restore yet. They are kept each time you save.')),
+      );
+      return;
+    }
+    final ok = await _confirm(
+      'Restore previous settings?',
+      'This loads the settings you had before your last save, including the fee, automatic approval '
+          'and attendance rules. Nothing changes until you press Save.',
+      'Restore',
+    );
+    if (!ok || !mounted) return;
+    setState(() {
+      _load(previous);
+      _companyNameCtrl.text = previous.companyName;
+      _formVersion++;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Previous settings loaded. Press Save to apply them.')),
+    );
   }
 
   @override
@@ -108,6 +184,10 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
           feeSchedule: _feeSchedule,
           maxDrawsPerCycle: _maxDrawsPerCycle,
           clockSource: _clockSource,
+          allowManualHourEdits: _allowManualHourEdits,
+          allowAttendanceImport: _allowAttendanceImport,
+          maxShiftHours: _maxShiftHours,
+          countOnlyReviewedHours: _countOnlyReviewedHours,
           disbursementPolicy: _disbursementPolicy,
           paydayRule: _paydayRule,
           autoApprove: _autoApprove,
@@ -343,6 +423,7 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
           radius: 16,
           padding: const EdgeInsets.all(16),
           child: FeeScheduleEditor(
+            key: ValueKey('fee-$_formVersion'),
             initial: _feeSchedule,
             onChanged: (schedule, problem) {
               _feeSchedule = schedule;
@@ -398,6 +479,60 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
                     ),
                   ),
               ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // ── Attendance & hours ──────────────────────────────────────────────
+        _SectionLabel('Attendance & hours'),
+        GlassCard(
+          radius: 16,
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Admins can add and correct hours'),
+                subtitle: const Text(
+                  'Add missing hours, correct a record or void it. Every change needs a reason and is logged with who made it.',
+                ),
+                value: _allowManualHourEdits,
+                onChanged: (v) => setState(() => _allowManualHourEdits = v),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Admins can upload attendance'),
+                subtitle: const Text('Import a file of clock-in and clock-out times from another system or a spreadsheet.'),
+                value: _allowAttendanceImport,
+                onChanged: (v) => setState(() => _allowAttendanceImport = v),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Only signed-off hours count towards advances'),
+                subtitle: const Text(
+                  'Safest. Workers can draw against time once a supervisor has signed it off, so advances follow approved timesheets.',
+                ),
+                value: _countOnlyReviewedHours,
+                onChanged: (v) => setState(() => _countOnlyReviewedHours = v),
+              ),
+              const SizedBox(height: 8),
+              Text('Longest single time record: $_maxShiftHours hours',
+                  style: Theme.of(context).textTheme.bodyMedium),
+              Slider(
+                value: _maxShiftHours.toDouble(),
+                min: 1,
+                max: 24,
+                divisions: 23,
+                label: '$_maxShiftHours h',
+                onChanged: (v) => setState(() => _maxShiftHours = v.round()),
+              ),
+              Text(
+                'One record never counts for longer than this, even if someone forgets to clock out or types a wrong time. '
+                'It also limits what an admin can enter or upload as one shift.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
             ],
           ),
         ),
@@ -533,6 +668,26 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
           label: 'Save settings',
           width: double.infinity,
           onPressed: _save,
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _resetToDefaults,
+                icon: const Icon(Icons.restart_alt),
+                label: const Text('Reset to defaults'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _restorePrevious,
+                icon: const Icon(Icons.history),
+                label: const Text('Restore previous'),
+              ),
+            ),
+          ],
         ),
       ],
     );

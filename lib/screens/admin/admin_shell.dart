@@ -6,6 +6,7 @@ import '../../theme/glass_theme.dart';
 import '../../widgets/glass_components.dart';
 import '../../widgets/sign_out_button.dart';
 import 'admin_dashboard_screen.dart';
+import 'attendance_import_screen.dart';
 import 'audit_log_screen.dart';
 import 'disbursements_screen.dart';
 import 'payroll_export_screen.dart';
@@ -141,6 +142,13 @@ class _MoreScreen extends ConsumerWidget {
             subtitle: 'Full activity and decision history',
             onTap: () => Navigator.of(context).push(MaterialPageRoute(
                 builder: (_) => const AuditLogScreen())),
+          ),
+          _MoreTile(
+            icon: Icons.upload_file_outlined,
+            label: 'Upload attendance',
+            subtitle: 'Import clock-in and clock-out times from a file or spreadsheet',
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => const AttendanceImportScreen())),
           ),
           _MoreTile(
             icon: Icons.badge_outlined,

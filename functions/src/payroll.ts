@@ -1,7 +1,9 @@
 import { DocumentReference, Timestamp } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { DrawRequestDoc, EmployeeDoc, db, requireCompanyAdmin } from "./common";
-import { SessionSpan, accruedMinor } from "./drawRules";
+import { accruedMinor } from "./drawRules";
+import { defaultAppSettings } from "./defaults";
+import { countableSpans, parseHoursPolicy } from "./hours";
 
 const LOCK_TTL_MS = 15 * 60_000;
 const BATCH_SIZE = 400;
@@ -98,6 +100,8 @@ export const runPayroll = onCall(async (request) => {
       ? Timestamp.fromMillis(cycleEnd.toMillis() - FIRST_RUN_LOOKBACK_MS)
       : (previousRunSnap.docs[0].data().cycleEnd as Timestamp);
 
+    const settingsSnap = await companyRef.collection("settings").doc("app").get();
+    const hours = parseHoursPolicy({ ...defaultAppSettings(""), ...(settingsSnap.data() ?? {}) });
     const employeesSnap = await companyRef.collection("employees").get();
     const lines: PayrollLine[] = [];
 
@@ -113,13 +117,18 @@ export const runPayroll = onCall(async (request) => {
         .get();
       // Closed sessions only. Filtered here rather than in the query so it
       // uses the existing (employeeId, clockInTs) index.
-      const sessions: SessionSpan[] = sessionsSnap.docs
-        .filter((doc) => doc.data().clockOutTs != null)
-        .map((doc) => ({
-          clockInMs: (doc.data().clockInTs as Timestamp).toMillis(),
-          clockOutMs: (doc.data().clockOutTs as Timestamp).toMillis(),
-        }));
-      const accrued = accruedMinor(employee.hourlyRate, sessions, cycleEnd.toMillis());
+      const sessions = countableSpans(
+        sessionsSnap.docs
+          .filter((doc) => doc.data().clockOutTs != null)
+          .map((doc) => ({
+            clockInMs: (doc.data().clockInTs as Timestamp).toMillis(),
+            clockOutMs: (doc.data().clockOutTs as Timestamp).toMillis(),
+            voided: doc.data().voided,
+            reviewedAtMs: (doc.data().reviewedAt as Timestamp | null | undefined)?.toMillis() ?? null,
+          })),
+        hours,
+      );
+      const accrued = accruedMinor(employee.hourlyRate, sessions, cycleEnd.toMillis(), hours.maxShiftMs);
 
       const drawsSnap = await companyRef
         .collection("draw_requests")

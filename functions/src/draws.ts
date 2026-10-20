@@ -19,6 +19,7 @@ import {
   formatMinor,
   withinCap,
 } from "./drawRules";
+import { countableSpans, parseHoursPolicy } from "./hours";
 import { AutoApprovePolicy, parseAutoApprove, parseFeeSchedule, shouldAutoApprove, validateFeeSchedule } from "./feeSchedule";
 
 interface DrawContext {
@@ -26,6 +27,7 @@ interface DrawContext {
   limits: DrawLimits;
   rule: PaydayRule;
   sessions: SessionSpan[];
+  maxShiftMs: number;
   outstanding: Array<{ id: string; amountMinor: number; createdAtMs: number }>;
   autoApprove: AutoApprovePolicy;
 }
@@ -85,10 +87,16 @@ async function readDrawContext(
     ),
   ]);
 
-  const sessions: SessionSpan[] = sessionsSnap.docs.map((doc) => ({
-    clockInMs: (doc.data().clockInTs as Timestamp).toMillis(),
-    clockOutMs: (doc.data().clockOutTs as Timestamp | null | undefined)?.toMillis() ?? null,
-  }));
+  const hours = parseHoursPolicy(settings);
+  const sessions = countableSpans(
+    sessionsSnap.docs.map((doc) => ({
+      clockInMs: (doc.data().clockInTs as Timestamp).toMillis(),
+      clockOutMs: (doc.data().clockOutTs as Timestamp | null | undefined)?.toMillis() ?? null,
+      voided: doc.data().voided,
+      reviewedAtMs: (doc.data().reviewedAt as Timestamp | null | undefined)?.toMillis() ?? null,
+    })),
+    hours,
+  );
   const outstanding = drawsSnap.docs
     .filter((doc) => doc.data().status !== "rejected")
     .map((doc) => ({
@@ -97,7 +105,7 @@ async function readDrawContext(
       createdAtMs: (doc.data().createdAt as Timestamp | undefined)?.toMillis() ?? 0,
     }));
 
-  return { hourlyRate: employee.hourlyRate, limits, rule, sessions, outstanding, autoApprove: parseAutoApprove(settings) };
+  return { hourlyRate: employee.hourlyRate, limits, rule, sessions, maxShiftMs: hours.maxShiftMs, outstanding, autoApprove: parseAutoApprove(settings) };
 }
 
 /**
@@ -125,7 +133,7 @@ export const requestDraw = onCall(async (request) => {
 
     const check = checkNewDraw({
       amountMinor,
-      accruedMinor: accruedMinor(ctx.hourlyRate, ctx.sessions, nowMs),
+      accruedMinor: accruedMinor(ctx.hourlyRate, ctx.sessions, nowMs, ctx.maxShiftMs),
       limits: ctx.limits,
       outstanding: ctx.outstanding,
     });
@@ -239,7 +247,7 @@ export const decideDrawRequest = onCall(async (request) => {
       const drawnMinor = ctx.outstanding
         .filter((d) => d.id !== requestId && d.createdAtMs >= cycleStartMs)
         .reduce((sum, d) => sum + d.amountMinor, draw.amountMinor);
-      const accrued = accruedMinor(ctx.hourlyRate, ctx.sessions, Date.now());
+      const accrued = accruedMinor(ctx.hourlyRate, ctx.sessions, Date.now(), ctx.maxShiftMs);
       if (!withinCap(accrued, ctx.limits.maxDrawPercent, drawnMinor)) {
         throw new HttpsError(
           "failed-precondition",
