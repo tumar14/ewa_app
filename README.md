@@ -76,3 +76,15 @@ Management sets both in **Admin Settings** (stored in the company's `settings/ap
 - Settings are written by the admin app directly, so the server re-validates the fee schedule on
   every request and refuses to charge anything if it is invalid.
 
+
+## Website industry list
+
+The Industry dropdown on the website's "Register your company" page is set by the platform admin in the
+app: **Platform Admin > Platform settings**. The list is stored in `platform_config/website`, which the
+static site reads directly from Firestore (public read; only the platform admin can write it, see
+`firestore.rules`). `submitEnquiry` accepts only an industry from the saved list, or "Other".
+
+- Until a list is saved, the standard list in `functions/src/industries.ts` is used. The website build
+  (`scripts/build-hosting.mjs`) embeds it as the fallback, so run `cd functions && npm run build` first.
+  `lib/models/platform_config.dart` mirrors it and a test keeps the two identical.
+- After changing the rules, deploy them (`firebase deploy --only firestore:rules`) or the site cannot read the list.

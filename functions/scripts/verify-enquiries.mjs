@@ -98,6 +98,25 @@ async function main() {
   check("the 6th submission from one source in an hour is limited", results.slice(0, 5).every((s) => s === 200) && results.slice(5).every((s) => s === 429), results.join(","));
   check("the limit applies per source, not globally", (await post(employer, { ip: "198.51.100.5" })).status === 200);
 
+  console.log("\n-- industry dropdown --");
+  const configRef = db.doc("platform_config/website");
+  await configRef.delete();
+  const withIndustry = (industry) => post({ ...employer, companyName: `Industry Co ${randomBytes(2).toString("hex")}`, industry });
+  check("with no list saved, a standard industry is accepted", (await withIndustry("Construction")).status === 200);
+  const refused = await withIndustry("Space tourism");
+  check("an industry that is not on the list is refused", refused.status === 400 && /industry/i.test(refused.body.error ?? ""), JSON.stringify(refused.body));
+  check("the wrong case is refused (it must be exactly what the dropdown offers)", (await withIndustry("construction")).status === 400);
+  check("'Other' is always accepted", (await withIndustry("Other")).status === 200);
+  check("no industry at all is still accepted", (await post({ ...employer, companyName: `No Industry Co ${randomBytes(2).toString("hex")}` })).status === 200);
+  await configRef.set({ industries: ["Sugar farming", "Fishing"], updatedBy: "test" });
+  check("once the platform admin saves a list, its entries are accepted", (await withIndustry("Sugar farming")).status === 200);
+  check("and standard ones that were taken off are refused", (await withIndustry("Construction")).status === 400);
+  check("'Other' still works when it is not in the saved list", (await withIndustry("Other")).status === 200);
+  const accepted = (await db.collection("public_enquiries").where("industry", "==", "Sugar farming").get()).docs[0]?.data();
+  check("the chosen industry is stored with the enquiry", accepted?.industry === "Sugar farming");
+  await configRef.set({ industries: ["", 5, "<b>x</b>"], updatedBy: "test" });
+  check("a saved list with nothing usable falls back to the standard list", (await withIndustry("Construction")).status === 200);
+
   console.log("\n-- firestore rules --");
   const platform = await signedIn({ platformAdmin: true });
   const companyAdmin = await signedIn({ companyId: "some-company", platformAdmin: false });
@@ -122,6 +141,29 @@ async function main() {
   check("or delete one", del.status === 403);
   const limits = await fetch(`${FS_BASE}/enquiry_rate_limits`, { headers: { Authorization: `Bearer ${platform.token}` } });
   check("rate-limit counters are not readable by clients", limits.status === 403);
+
+  console.log("\n-- platform_config rules (industries) --");
+  await configRef.set({ industries: ["Sugar farming", "Fishing"], updatedBy: "test" });
+  const read = (t, id = "website") => get(t, `platform_config/${id}`);
+  check("anyone, signed in or not, can read the website config", (await read(anon.token)).status === 200 && (await read(companyAdmin.token)).status === 200);
+  const body = (await (await read(anon.token)).json()).fields?.industries?.arrayValue?.values?.map((v) => v.stringValue);
+  check("and the site's REST read returns the list", JSON.stringify(body) === JSON.stringify(["Sugar farming", "Fishing"]), JSON.stringify(body));
+  check("no other platform_config document is readable", (await read(platform.token, "secrets")).status === 403);
+  const put = (t, fields, id = "website") => fetch(`${FS_BASE}/platform_config/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json", ...(t ? { Authorization: `Bearer ${t}` } : {}) }, body: JSON.stringify({ fields }) });
+  const arr = (...names) => ({ arrayValue: { values: names.map((n) => ({ stringValue: n })) } });
+  const valid = (uid) => ({ industries: arr("Retail", "Mining"), updatedBy: { stringValue: uid } });
+  check("the platform admin can save a list", (await put(platform.token, valid(platform.uid))).status === 200);
+  check("a company admin cannot", (await put(companyAdmin.token, valid(companyAdmin.uid))).status === 403);
+  check("an anonymous visitor cannot", (await put(undefined, valid("x"))).status === 403);
+  check("updatedBy must be the caller", (await put(platform.token, valid("someone-else"))).status === 403);
+  check("an empty list is refused", (await put(platform.token, { industries: arr(), updatedBy: { stringValue: platform.uid } })).status === 403);
+  check("a list of more than 50 is refused", (await put(platform.token, { industries: arr(...Array.from({ length: 51 }, (_, i) => `I${i}`)), updatedBy: { stringValue: platform.uid } })).status === 403);
+  check("other fields cannot be added", (await put(platform.token, { ...valid(platform.uid), banner: { stringValue: "x" } })).status === 403);
+  check("a list must be a list", (await put(platform.token, { industries: { stringValue: "Retail" }, updatedBy: { stringValue: platform.uid } })).status === 403);
+  check("no other document can be created", (await put(platform.token, valid(platform.uid), "other")).status === 403);
+  const delConfig = await fetch(`${FS_BASE}/platform_config/website`, { method: "DELETE", headers: { Authorization: `Bearer ${platform.token}` } });
+  check("the config cannot be deleted by a client", delConfig.status === 403);
+  await configRef.delete();
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail === 0 ? 0 : 1);

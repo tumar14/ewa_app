@@ -6,6 +6,9 @@
 // Environment (all optional):
 //   ENQUIRY_ENDPOINT  where the website forms post (default /api/enquiry, which
 //                     firebase.json rewrites to the submitEnquiry function)
+//   INDUSTRIES_URL    where the registration form reads its industry list (default:
+//                     the public platform_config/website document of the Firebase
+//                     project in lib/firebase_options.dart, read over the REST API)
 //   FLUTTER_ARGS      extra arguments for `flutter build web`
 //
 // Pages live in site/pages/*.html with a small front-matter block:
@@ -17,12 +20,31 @@
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const out = path.join(root, "hosting");
 const siteOnly = process.argv.includes("--site-only");
 const endpoint = process.env.ENQUIRY_ENDPOINT ?? "/api/enquiry";
+
+// The web app's public Firebase settings (the same ones the app ships with).
+function industriesUrl() {
+  if (process.env.INDUSTRIES_URL !== undefined) return process.env.INDUSTRIES_URL;
+  const options = readFileSync(path.join(root, "lib", "firebase_options.dart"), "utf8");
+  const web = options.match(/FirebaseOptions web = FirebaseOptions\(([\s\S]*?)\);/)?.[1] ?? "";
+  const apiKey = web.match(/apiKey: '([^']+)'/)?.[1];
+  const projectId = web.match(/projectId: '([^']+)'/)?.[1];
+  if (!apiKey || !projectId) throw new Error("could not read the web apiKey/projectId from lib/firebase_options.dart");
+  return `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/platform_config/website?key=${apiKey}`;
+}
+
+// The standard industries are defined once, in the functions code (the server uses them too).
+async function defaultIndustries() {
+  const file = path.join(root, "functions", "lib", "industries.js");
+  if (!existsSync(file)) throw new Error("functions/lib/industries.js is missing: run `cd functions && npm run build` first");
+  return [...(await import(pathToFileURL(file).href)).DEFAULT_INDUSTRIES];
+}
+const industriesEndpoint = industriesUrl();
 
 const layout = readFileSync(path.join(root, "site", "layout.html"), "utf8");
 const pagesDir = path.join(root, "site", "pages");
@@ -45,11 +67,13 @@ cpSync(path.join(root, "site", "assets"), path.join(out, "assets"), { recursive:
 cpSync(path.join(root, "web", "icons", "Icon-192.png"), path.join(out, "assets", "apple-touch-icon.png"));
 writeFileSync(
   path.join(out, "assets", "config.js"),
-  `window.HOLA_CONFIG = ${JSON.stringify({ enquiryEndpoint: endpoint, appUrl: "/app" })};\n`,
+  `window.HOLA_CONFIG = ${JSON.stringify({ enquiryEndpoint: endpoint, appUrl: "/app", industriesUrl: industriesEndpoint, defaultIndustries: await defaultIndustries() })};\n`,
 );
 
-let connectSrc = "";
-if (/^https?:\/\//.test(endpoint)) connectSrc = new URL(endpoint).origin;
+const connectSrc = [endpoint, industriesEndpoint]
+  .filter((u) => /^https?:\/\//.test(u))
+  .map((u) => new URL(u).origin)
+  .join(" ");
 
 function parse(file) {
   const raw = readFileSync(file, "utf8").replace(/\r\n/g, "\n");

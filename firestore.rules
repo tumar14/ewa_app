@@ -168,6 +168,21 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // platform_config/website — what the public website offers, today the
+    // industries in the registration form's dropdown. Public read (the static
+    // site loads it; nothing sensitive belongs here), platform-admin write only,
+    // and only that one document with only these fields.
+    match /platform_config/{docId} {
+      allow read: if docId == 'website';
+      allow create, update: if docId == 'website' && isPlatformAdmin() &&
+        request.resource.data.keys().hasOnly(['industries', 'updatedAt', 'updatedBy']) &&
+        request.resource.data.industries is list &&
+        request.resource.data.industries.size() >= 1 &&
+        request.resource.data.industries.size() <= 50 &&
+        request.resource.data.updatedBy == request.auth.uid;
+      allow delete: if false;
+    }
+
     // company_codes/{shortCode} -> companyId — public-read pointer so the
     // claim screen's "enter a company code" path can resolve a company
     // without listing every company. Same lookup-by-key pattern as

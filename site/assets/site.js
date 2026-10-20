@@ -36,6 +36,41 @@
     a.setAttribute("href", cfg.appUrl || "/app");
   });
 
+  // Industry dropdown. The platform admin's list is public (platform_config/website),
+  // so the page reads it straight from Firestore. Until it arrives, or if it
+  // cannot be reached or has not been set, the standard list from the build is used.
+  document.querySelectorAll("select[data-industries]").forEach(function (select) {
+    var placeholder = select.querySelector("option[value='']");
+
+    function fill(names) {
+      var chosen = select.value;
+      select.querySelectorAll("option").forEach(function (o) {
+        if (o !== placeholder) o.remove();
+      });
+      names.forEach(function (name) {
+        var o = document.createElement("option");
+        o.value = name;
+        o.textContent = name;
+        select.appendChild(o);
+      });
+      if (chosen && names.indexOf(chosen) !== -1) select.value = chosen;
+    }
+
+    fill(cfg.defaultIndustries || []);
+    if (!cfg.industriesUrl) return;
+    fetch(cfg.industriesUrl)
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (doc) {
+        var values = doc && doc.fields && doc.fields.industries && doc.fields.industries.arrayValue &&
+          doc.fields.industries.arrayValue.values;
+        var names = (values || [])
+          .map(function (v) { return typeof v.stringValue === "string" ? v.stringValue : ""; })
+          .filter(function (n) { return n; });
+        if (names.length) fill(names);
+      })
+      .catch(function () { /* keep the standard list */ });
+  });
+
   // Enquiry forms (employer registration and contact).
   document.querySelectorAll("form[data-enquiry]").forEach(function (form) {
     var status = form.querySelector(".form-status");

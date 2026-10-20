@@ -1,6 +1,8 @@
 // Validation for the public website forms (employer registration and contact).
 // Pure: no Firebase imports, unit-tested in enquiryRules.test.ts.
 
+import { DEFAULT_INDUSTRIES } from "./industries";
+
 export type EnquiryType = "employer_registration" | "contact";
 
 export interface CleanEnquiry {
@@ -43,7 +45,11 @@ function text(
   return { value };
 }
 
-export function validateEnquiry(body: unknown): EnquiryResult {
+/**
+ * `industries` is what the registration form's Industry dropdown offers
+ * (see industries.ts); a submitted industry must be one of them.
+ */
+export function validateEnquiry(body: unknown, industries: readonly string[] = DEFAULT_INDUSTRIES): EnquiryResult {
   if (typeof body !== "object" || body === null || Array.isArray(body)) {
     return { ok: false, error: "Invalid request." };
   }
@@ -85,7 +91,9 @@ export function validateEnquiry(body: unknown): EnquiryResult {
       take("jobTitle", "Job title", { max: 100 }),
       take("contactEmail", "Work email", { required: true, max: 160 }, emailCheck),
       take("contactPhone", "Phone number", { required: true, max: 25 }, phoneCheck),
-      take("industry", "Industry", { max: 100 }),
+      take("industry", "Industry", { max: 100 }, (v) =>
+        industries.includes(v) ? null : "Choose an industry from the list. Please reload the page and try again.",
+      ),
       take("payFrequency", "Pay frequency", { max: 40 }),
       take("message", "Message", { max: 1500, multiline: true }),
     );

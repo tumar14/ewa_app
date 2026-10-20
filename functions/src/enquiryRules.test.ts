@@ -94,3 +94,14 @@ test("hour bucket", () => {
   assert.equal(hourBucket(Date.parse("2026-10-20T16:59:59Z")), "2026102016");
   assert.equal(hourBucket(Date.parse("2026-10-20T17:00:00Z")), "2026102017");
 });
+
+test("industry is optional, but if given it must be one the form offers", () => {
+  assert.equal(validateEnquiry(employer).ok, true);
+  assert.equal(validateEnquiry({ ...employer, industry: "Construction" }).ok, true);
+  assert.equal(validateEnquiry({ ...employer, industry: "Space tourism" }).ok, false);
+  assert.equal(validateEnquiry({ ...employer, industry: "construction" }).ok, false);
+  assert.equal(validateEnquiry({ ...employer, industry: "Space tourism" }, ["Space tourism", "Other"]).ok, true);
+  const r = validateEnquiry({ ...employer, industry: "  Construction  " });
+  if (r.ok === true) assert.equal(r.enquiry.fields.industry, "Construction");
+  else assert.fail("expected ok");
+});

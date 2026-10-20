@@ -3,6 +3,7 @@ import { Timestamp } from "firebase-admin/firestore";
 import { onRequest } from "firebase-functions/v2/https";
 import { db } from "./common";
 import { ENQUIRY_LIMIT_PER_HOUR, hourBucket, validateEnquiry } from "./enquiryRules";
+import { allowedIndustries } from "./industries";
 
 const MAX_BODY_BYTES = 8 * 1024;
 
@@ -28,7 +29,8 @@ export const submitEnquiry = onRequest({ cors: true, maxInstances: 5 }, async (r
     return;
   }
 
-  const result = validateEnquiry(req.body);
+  const config = await db.doc("platform_config/website").get();
+  const result = validateEnquiry(req.body, allowedIndustries(config.data()?.industries));
   if (result.ok === "spam") {
     // Look successful so bots learn nothing, but store nothing.
     res.status(200).json({ ok: true });

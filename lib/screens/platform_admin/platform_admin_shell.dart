@@ -5,6 +5,7 @@ import '../../widgets/glass_components.dart';
 import '../../providers/enquiry_providers.dart';
 import 'company_list_screen.dart';
 import 'enquiries_screen.dart';
+import 'platform_settings_screen.dart';
 import 'record_payment_screen.dart';
 
 /// Root shell for the platform super-admin. Deliberately minimal and
@@ -35,6 +36,13 @@ class PlatformAdminShell extends ConsumerWidget {
               ),
             );
           }),
+          IconButton(
+            tooltip: 'Platform settings',
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const PlatformSettingsScreen()),
+            ),
+          ),
           IconButton(
             tooltip: 'Record payment',
             icon: const Icon(Icons.account_balance_outlined),
